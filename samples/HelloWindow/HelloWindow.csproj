@@ -12,6 +12,7 @@
     <!-- The sample's rendering choice, not Skyline's: raw wgpu. The Native
          package ships the wgpu_native binary into runtimes/. -->
     <PackageReference Include="Silk.NET.WebGPU" />
+    <PackageReference Include="Silk.NET.WebGPU.Extensions.WGPU" />
     <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
   </ItemGroup>
 </Project>

@@ -34,3 +34,7 @@ geometry and timing; presenting is yours.
 ```sh
 dotnet run --project samples/HelloWindow -- --frames 60
 ```
+
+  Two extra headless checks: `--dump-hud` prints the HUD raster as ASCII
+  art (font sanity), and `--verify-hud` reads the final frame back from
+  the GPU and asserts the HUD panel pixels are in the presented image.
