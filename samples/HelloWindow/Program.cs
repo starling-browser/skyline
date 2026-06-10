@@ -9,6 +9,9 @@ using Skyline.Input;
 // hue cycle, press Escape to quit. Pass --frames N to auto-close after N
 // presented frames (smoke test).
 
+if (Array.IndexOf(args, "--dump-hud") >= 0)
+    return HelloWindow.DumpFont.Run();
+
 var maxFrames = 0;
 var argIdx = Array.IndexOf(args, "--frames");
 if (argIdx >= 0 && argIdx + 1 < args.Length)
@@ -51,7 +54,15 @@ win.RenderFrame += f =>
 {
     inputDirty = false;
     if (animate) hue = (hue + (float)f.DeltaSeconds * 0.2f) % 1f;
-    if (!gpu.RenderClear(pointerX, hue + pointerY * 0.5f, 0.45f)) return;
+    var r = pointerX;
+    var g = (hue + pointerY * 0.5f) % 1f;
+    var b = 0.45f;
+    string[] hud =
+    [
+        "MOVE POINTER: COLOR   SPACE: HUE CYCLE " + (animate ? "ON " : "OFF") + "   ESC: QUIT",
+        $"R {r:0.00}   G {g:0.00}   B {b:0.00}   HUE {hue:0.00}",
+    ];
+    if (!gpu.RenderClear(r, g, b, hud, f.Dpr)) return;
     presented++;
     if (maxFrames > 0 && presented >= maxFrames) win.RequestClose();
 };
@@ -110,16 +121,22 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         {
             Device = _device,
             Format = Format,
-            Usage = TextureUsage.RenderAttachment,
+            // CopyDst lets the HUD overlay be written straight into the
+            // acquired swapchain texture (no shader pipeline in this sample).
+            Usage = TextureUsage.RenderAttachment | TextureUsage.CopyDst,
             Width = (uint)Math.Max(1, pixelWidth),
             Height = (uint)Math.Max(1, pixelHeight),
             PresentMode = PresentMode.Fifo,
             AlphaMode = CompositeAlphaMode.Auto,
         };
         _wgpu.SurfaceConfigure(_surface, in config);
+        _surfaceSize = (Math.Max(1, pixelWidth), Math.Max(1, pixelHeight));
     }
 
-    public bool RenderClear(float r, float g, float b)
+    private (string Key, int W, int H, byte[] Px)? _hudCache;
+    private (int W, int H) _surfaceSize;
+
+    public bool RenderClear(float r, float g, float b, string[] hudLines, float dpr)
     {
         SurfaceTexture st = default;
         _wgpu.SurfaceGetCurrentTexture(_surface, ref st);
@@ -144,10 +161,43 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         _wgpu.QueueSubmit(_queue, 1, &cmd);
         _wgpu.CommandBufferRelease(cmd);
         _wgpu.CommandEncoderRelease(enc);
+        WriteHud(st.Texture, hudLines, dpr);
         _wgpu.SurfacePresent(_surface);
         _wgpu.TextureViewRelease(view);
         _wgpu.TextureRelease(st.Texture);
         return true;
+    }
+
+    private void WriteHud(Texture* surfaceTexture, string[] lines, float dpr)
+    {
+        var key = string.Join('\n', lines);
+        if (_hudCache is not { } hud || hud.Key != key)
+        {
+            var (w, h, px) = HelloWindow.TextOverlay.Render(lines, (int)MathF.Round(2 * dpr));
+            hud = (key, w, h, px);
+            _hudCache = hud;
+        }
+
+        var margin = (int)MathF.Round(16 * dpr);
+        if (margin + hud.W > _surfaceSize.W || margin + hud.H > _surfaceSize.H)
+            return; // window too small for the panel; skip rather than clip
+
+        var dst = new ImageCopyTexture
+        {
+            Texture = surfaceTexture,
+            MipLevel = 0,
+            Origin = new Origin3D { X = (uint)margin, Y = (uint)margin, Z = 0 },
+            Aspect = TextureAspect.All,
+        };
+        var layout = new TextureDataLayout
+        {
+            Offset = 0,
+            BytesPerRow = (uint)(hud.W * 4),
+            RowsPerImage = (uint)hud.H,
+        };
+        var extent = new Extent3D { Width = (uint)hud.W, Height = (uint)hud.H, DepthOrArrayLayers = 1 };
+        fixed (byte* p = hud.Px)
+            _wgpu.QueueWriteTexture(_queue, in dst, p, (nuint)hud.Px.Length, in layout, in extent);
     }
 
     public void Dispose()
