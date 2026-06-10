@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/samples/">
+    <Project Path="samples/HelloWindow/HelloWindow.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Skyline/Skyline.csproj" />
+  </Folder>
+</Solution>

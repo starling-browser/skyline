@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>HelloWindow</RootNamespace>
+    <!-- wgpu surface/swapchain interop is pointer-based. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The sample's rendering choice, not Skyline's: raw wgpu. The Native
+         package ships the wgpu_native binary into runtimes/. -->
+    <PackageReference Include="Silk.NET.WebGPU" />
+    <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
+  </ItemGroup>
+</Project>

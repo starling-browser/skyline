@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Skyline</RootNamespace>
+    <!-- Clipboard goes through the GLFW window handle, which is pointer-shaped. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>A native window with OS chrome, an event loop, input, and a surface handle. No rendering opinion — bring your own presenter.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.Windowing.Common" />
+    <PackageReference Include="Silk.NET.Windowing.Glfw" />
+    <PackageReference Include="Silk.NET.Input.Common" />
+    <PackageReference Include="Silk.NET.Input.Glfw" />
+    <PackageReference Include="Silk.NET.Maths" />
+    <PackageReference Include="Silk.NET.GLFW" />
+  </ItemGroup>
+</Project>
