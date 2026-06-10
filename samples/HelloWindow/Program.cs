@@ -28,7 +28,11 @@ var hue = 0f;
 var inputDirty = true;
 var presented = 0;
 
-win.Resized += f => gpu.Configure(f.PixelWidth, f.PixelHeight);
+win.Resized += f =>
+{
+    gpu.Configure(f.PixelWidth, f.PixelHeight);
+    inputDirty = true; // reconfigure discards surface contents; redraw
+};
 
 win.PointerInput += e =>
 {
@@ -52,7 +56,6 @@ win.IsDirty = () => maxFrames > 0 || animate || inputDirty;
 
 win.RenderFrame += f =>
 {
-    inputDirty = false;
     if (animate) hue = (hue + (float)f.DeltaSeconds * 0.2f) % 1f;
     var r = pointerX;
     var g = (hue + pointerY * 0.5f) % 1f;
@@ -62,7 +65,8 @@ win.RenderFrame += f =>
         "MOVE POINTER: COLOR   SPACE: HUE CYCLE " + (animate ? "ON " : "OFF") + "   ESC: QUIT",
         $"R {r:0.00}   G {g:0.00}   B {b:0.00}   HUE {hue:0.00}",
     ];
-    if (!gpu.RenderClear(r, g, b, hud, f.Dpr)) return;
+    if (!gpu.RenderClear(r, g, b, hud, f.Dpr)) return; // stay dirty; retry next frame
+    inputDirty = false;
     presented++;
     if (maxFrames > 0 && presented >= maxFrames) win.RequestClose();
 };
