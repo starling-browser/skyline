@@ -25,13 +25,17 @@ var pointerX = 0.5f;
 var pointerY = 0.5f;
 var animate = false;
 var hue = 0f;
-var inputDirty = true;
+// After any change, present a short burst of frames rather than exactly
+// one: early presents can land while the window is still being mapped /
+// composited by the OS, and a single frame rendered then never becomes
+// visible. ~30 frames (~0.5s) comfortably outlives window setup.
+var dirtyFrames = 30;
 var presented = 0;
 
 win.Resized += f =>
 {
     gpu.Configure(f.PixelWidth, f.PixelHeight);
-    inputDirty = true; // reconfigure discards surface contents; redraw
+    dirtyFrames = 30; // reconfigure discards surface contents; redraw
 };
 
 win.PointerInput += e =>
@@ -40,19 +44,19 @@ win.PointerInput += e =>
     var f = win.CurrentFrame;
     pointerX = Math.Clamp(e.X / Math.Max(1f, f.LogicalWidth), 0f, 1f);
     pointerY = Math.Clamp(e.Y / Math.Max(1f, f.LogicalHeight), 0f, 1f);
-    inputDirty = true;
+    dirtyFrames = Math.Max(dirtyFrames, 3);
 };
 
 win.KeyInput += e =>
 {
     if (!e.IsDown) return;
     if (e.Key == Key.Escape) win.RequestClose();
-    if (e.Key == Key.Space) { animate = !animate; inputDirty = true; }
+    if (e.Key == Key.Space) { animate = !animate; dirtyFrames = Math.Max(dirtyFrames, 3); }
 };
 
 // Render only when something changed: a smoke run (--frames) free-runs so it
 // finishes, otherwise idle frames sleep inside Skyline's loop.
-win.IsDirty = () => maxFrames > 0 || animate || inputDirty;
+win.IsDirty = () => maxFrames > 0 || animate || dirtyFrames > 0;
 
 win.RenderFrame += f =>
 {
@@ -66,7 +70,7 @@ win.RenderFrame += f =>
         $"R {r:0.00}   G {g:0.00}   B {b:0.00}   HUE {hue:0.00}",
     ];
     if (!gpu.RenderClear(r, g, b, hud, f.Dpr)) return; // stay dirty; retry next frame
-    inputDirty = false;
+    if (dirtyFrames > 0) dirtyFrames--;
     presented++;
     if (maxFrames > 0 && presented >= maxFrames) win.RequestClose();
 };
