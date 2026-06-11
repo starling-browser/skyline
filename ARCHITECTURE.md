@@ -45,6 +45,40 @@ target. WebGPU is the path Skyline builds for, tests, and ships.
 > swapchain from the same window handle, so a presenter on any of them
 > would also work here.
 
+## Multi-window: AppHost
+
+`AppHost` hosts many windows with one event loop and one render thread
+per window:
+
+```
+main thread                      render thread (per window)
+───────────                      ──────────────────────────
+WaitEventsTimeout ── pumps ──▶   apply pending resize
+input callbacks fire             pace (FramePacer)
+route close / Invoke()           acquire → encode → present
+        ▲                                │
+        └──── Wake() / RequestRedraw() ──┘
+```
+
+The split follows the platform rules. GLFW's event pump is global and
+must run on the main thread (a macOS requirement), so one loop serves
+every window. Rendering has no such rule — wgpu's device, queue, and
+surfaces are thread-safe — so each window draws on its own thread and
+blocks on its own swapchain at its own display's rate. That kills the
+classic multi-monitor stall: two vsynced windows on a 60 Hz and a
+144 Hz panel never share a blocking wait, so neither throttles the
+other. One `GpuContext` serves all windows — extra windows get surfaces
+from `CreateSurface`.
+
+The threading contract: input events and `Invoke` actions run on the
+main thread. `RenderFrame` and `Resized` run on that window's render
+thread, so all of a window's GPU work stays on one thread. Resizes are
+parked and applied between frames, never during one. Minimized windows
+are skipped entirely — macOS stops returning drawables for invisible
+windows, and touching their swapchain would hang the thread. Idle is
+event-driven: the pump sleeps in `WaitEventsTimeout`, input wakes it
+instantly, and `Wake()`/`RequestRedraw()` wake it from any thread.
+
 ## What the window host owns
 
 - Window creation with OS chrome (GLFW via Silk.NET) and DPI tracking.

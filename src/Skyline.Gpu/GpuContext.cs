@@ -138,6 +138,19 @@ public sealed unsafe class GpuContext : IDisposable
     /// <summary>The window surface, when built via <see cref="Create"/>. Null for headless contexts.</summary>
     public WindowSurface? Surface => _surface;
 
+    /// <summary>
+    /// Build a surface for another window on this same device. One device
+    /// serves any number of windows — multi-window apps should share one
+    /// context rather than building a chain per window. The caller owns
+    /// the returned surface and disposes it before this context.
+    /// </summary>
+    public WindowSurface CreateSurface(INativeWindowSource window, WindowSurfaceOptions? options = null)
+    {
+        var surface = window.CreateWebGPUSurface(_wgpu, _instance);
+        if (surface == null) throw new InvalidOperationException("wgpu surface creation failed");
+        return new WindowSurface(this, surface, options ?? new WindowSurfaceOptions());
+    }
+
     /// <summary>A validation or out-of-memory error wgpu could not attribute to an error scope.</summary>
     public event Action<ErrorType, string?>? UncapturedError;
 

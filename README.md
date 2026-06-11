@@ -38,6 +38,9 @@ return win.Run();
 - **Latency that stays flat.** `FramePacer` caps frames in flight, so
   the CPU can't queue work the GPU hasn't earned. One native call per
   frame, zero allocation.
+- **Windows that don't wait on each other.** `AppHost` runs many
+  windows — one event loop, one render thread each. A window on a 60 Hz
+  monitor never throttles one on a 144 Hz monitor.
 - **Nothing locked away.** Every raw wgpu handle is one property away.
   If WebGPU can do it, you still can.
 
@@ -59,6 +62,12 @@ Headless checks:
 - `--verify-hud` reads the final frame back from the GPU and asserts the
   panel's pixels are in the presented image.
 
+Two windows on one device, each with its own render thread:
+
+```sh
+dotnet run --project samples/TwoWindows
+```
+
 ## Requirements
 
 - .NET 10 SDK or later.
@@ -77,8 +86,8 @@ present modes and buffering work: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Early. The window host, the WebGPU layer, and the sample are real and
 tested on macOS. Windows and Linux paths exist through GLFW and wgpu but
-are not yet exercised. Planned next: key modifier state, pointer
-enter/leave, and a multi-window host.
+are not yet exercised. Planned next: key modifier state and pointer
+enter/leave.
 
 ## License
 

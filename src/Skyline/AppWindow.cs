@@ -20,8 +20,16 @@ public sealed class AppWindow : IDisposable
     private readonly IInputContext _input;
     private readonly Glfw _glfw;
     private readonly unsafe WindowHandle* _glfwHandle;
-    private float _dpr;
-    private Vector2D<int> _lastFb;
+
+    // Frame geometry as one immutable object: the main thread writes it on
+    // resize, a render thread reads it mid-frame. Swapping a reference is
+    // atomic; updating two plain fields is not.
+    private sealed record FrameGeom(int PixelWidth, int PixelHeight, float Dpr);
+    private volatile FrameGeom _geom = new(1, 1, 1f);
+    private volatile FrameGeom? _pendingResize;
+    private volatile bool _minimized;
+    private readonly AutoResetEvent _redraw = new(false);
+    internal AppHost? Host;
 
     public unsafe AppWindow(AppWindowOptions? options = null)
     {
@@ -42,8 +50,8 @@ public sealed class AppWindow : IDisposable
         });
         _window.Initialize();
 
-        _dpr = _window.Size.X > 0 ? (float)_window.FramebufferSize.X / _window.Size.X : 1f;
-        _lastFb = _window.FramebufferSize;
+        var dpr = _window.Size.X > 0 ? (float)_window.FramebufferSize.X / _window.Size.X : 1f;
+        _geom = new FrameGeom(_window.FramebufferSize.X, _window.FramebufferSize.Y, dpr);
 
         _glfw = Glfw.GetApi();
         _glfwHandle = (WindowHandle*)(_window.Native?.Glfw
@@ -52,10 +60,23 @@ public sealed class AppWindow : IDisposable
         _window.FramebufferResize += sz =>
         {
             if (sz.X <= 0 || sz.Y <= 0) return;
-            _dpr = _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _dpr;
-            _lastFb = sz;
-            Resized?.Invoke(Frame(0));
+            var g = new FrameGeom(sz.X, sz.Y, _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _geom.Dpr);
+            _geom = g;
+            if (Host is null)
+            {
+                Resized?.Invoke(Frame(0));
+            }
+            else
+            {
+                // Hosted windows reconfigure their swapchain on their render
+                // thread, never mid-frame: park the resize until the next
+                // frame starts.
+                _pendingResize = g;
+                RequestRedraw();
+            }
         };
+
+        _window.StateChanged += state => _minimized = state == WindowState.Minimized;
 
         _window.Render += delta =>
         {
@@ -137,9 +158,17 @@ public sealed class AppWindow : IDisposable
     /// <summary>Run the event loop. Blocks until the window closes.</summary>
     public int Run()
     {
+        if (Host is not null)
+            throw new InvalidOperationException("this window belongs to an AppHost. Call AppHost.Run instead.");
         _window.Run();
         return 0;
     }
+
+    /// <summary>
+    /// Ask the host's render thread to draw a frame soon. Callable from any
+    /// thread. For windows driven by <see cref="Run"/>, use <see cref="IsDirty"/>.
+    /// </summary>
+    public void RequestRedraw() => _redraw.Set();
 
     /// <summary>
     /// Process pending OS events once, without the built-in loop. For
@@ -152,10 +181,36 @@ public sealed class AppWindow : IDisposable
     {
         _input.Dispose();
         _window.Dispose();
+        _redraw.Dispose();
     }
 
-    private FrameInfo Frame(double delta) =>
-        new(_lastFb.X, _lastFb.Y, _dpr, delta);
+    private FrameInfo Frame(double delta)
+    {
+        var g = _geom;
+        return new FrameInfo(g.PixelWidth, g.PixelHeight, g.Dpr, delta);
+    }
+
+    // The host-facing seam. The render thread calls these; everything else
+    // on this class stays main-thread.
+    internal bool IsClosing => _window.IsClosing;
+    internal bool IsMinimized => _minimized;
+    internal bool ShouldRenderNow => IsDirty?.Invoke() != false;
+    internal void RaiseRenderFrame(double delta) => RenderFrame?.Invoke(Frame(delta));
+    internal bool WaitForRedraw(int milliseconds) => _redraw.WaitOne(milliseconds);
+
+    internal bool TryConsumePendingResize(out FrameInfo frame)
+    {
+        var g = Interlocked.Exchange(ref _pendingResize, null);
+        if (g is null)
+        {
+            frame = default;
+            return false;
+        }
+        frame = new FrameInfo(g.PixelWidth, g.PixelHeight, g.Dpr, 0);
+        return true;
+    }
+
+    internal void RaiseResized(FrameInfo frame) => Resized?.Invoke(frame);
 
     private static Input.Key MapKey(Silk.NET.Input.Key k)
     {
