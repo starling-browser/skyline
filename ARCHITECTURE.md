@@ -170,3 +170,16 @@ device): the bookkeeping adds about 60 nanoseconds to a 3.5 microsecond
 submit, with zero managed allocation. With the cap engaged the loop sits
 in `Wait` for the GPU's actual completion time — that is the
 backpressure working, not overhead.
+
+## Sustainable frame rate
+
+The frame-rate benchmarks run a real paced frame loop at 2560x1440 and
+answer "what FPS can this stack sustain":
+
+- **Offscreen** (render and submit, no present): 0.7–0.9 ms per frame,
+  about 1,200–1,400 FPS — the stack sustains a 240 Hz panel with five
+  times headroom, allocation-free.
+- **Windowed**: 8.3 ms per frame, exactly the test panel's 120 Hz. Even
+  in Immediate mode, macOS hands out drawables at the display's refresh
+  rate. The wall is the display pipeline, not Skyline — the same loop
+  with the display out of the way runs ten times faster.

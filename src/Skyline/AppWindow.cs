@@ -141,6 +141,13 @@ public sealed class AppWindow : IDisposable
         return 0;
     }
 
+    /// <summary>
+    /// Process pending OS events once, without the built-in loop. For
+    /// consumers that drive their own frame loop — engines, benchmarks —
+    /// instead of subscribing to <see cref="RenderFrame"/>.
+    /// </summary>
+    public void PumpEvents() => _window.DoEvents();
+
     public void Dispose()
     {
         _input.Dispose();

@@ -6,6 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
     <ProjectReference Include="..\..\src\Skyline.Gpu\Skyline.Gpu.csproj" />
   </ItemGroup>
   <ItemGroup>
