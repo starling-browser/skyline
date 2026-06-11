@@ -7,12 +7,12 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Gpu\Skyline.Gpu.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <!-- The sample's rendering choice, not Skyline's: raw wgpu. The Native
-         package ships the wgpu_native binary into runtimes/. -->
-    <PackageReference Include="Silk.NET.WebGPU" />
-    <PackageReference Include="Silk.NET.WebGPU.Extensions.WGPU" />
+    <!-- Apps pick the native WebGPU build they ship; this package puts the
+         wgpu_native binary into runtimes/. Silk.NET.WebGPU itself comes
+         through Skyline.Gpu. -->
     <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
   </ItemGroup>
 </Project>

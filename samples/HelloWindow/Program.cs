@@ -1,10 +1,12 @@
 using Silk.NET.WebGPU;
-using Silk.NET.WebGPU.Extensions.WGPU;
 using Skyline;
+using Skyline.Gpu;
 using Skyline.Input;
 
-// The proof: Skyline owns the window, loop, and input; this sample owns
-// rendering end to end with raw wgpu. Skyline never sees a pixel.
+// The proof: Skyline owns the window, loop, and input; Skyline.Gpu owns the
+// device chain, swapchain, and present mechanics; this sample owns what it
+// draws — a clear pass and a HUD copy encoded with raw wgpu through
+// Skyline.Gpu's escape hatches.
 //
 // Move the pointer to steer the clear color, press Space to toggle a slow
 // hue cycle, press Escape to quit. Pass --frames N to auto-close after N
@@ -85,7 +87,7 @@ win.RenderFrame += f =>
 };
 
 var code = win.Run();
-Console.WriteLine($"HELLO OK: presented {presented} frames via Skyline window + raw wgpu");
+Console.WriteLine($"HELLO OK: presented {presented} frames via Skyline window + Skyline.Gpu");
 if (verifyHud)
 {
     Console.WriteLine(verifyReport ?? "HUD VERIFY FAILED: no readback ran");
@@ -94,69 +96,34 @@ if (verifyHud)
 return presented > 0 ? code : 1;
 
 /// <summary>
-/// The sample's renderer: wgpu instance/device/swapchain built from
-/// Skyline's surface handle, presenting a solid clear color. This class is
-/// the part a real app would replace with its own engine.
+/// The sample's renderer. Skyline.Gpu provides the device, swapchain, and
+/// present; this class encodes its own work — a clear pass plus the HUD
+/// texture copy — with raw wgpu via the escape hatches. This is the part a
+/// real app would replace with its own engine.
 /// </summary>
 internal sealed unsafe class WgpuClearRenderer : IDisposable
 {
-    private readonly WebGPU _wgpu;
-    private readonly Instance* _instance;
-    private readonly Adapter* _adapter;
-    private readonly Device* _device;
-    private readonly Queue* _queue;
-    private readonly Surface* _surface;
+    private readonly GpuContext _gpu;
+    private readonly WindowSurface _surface;
     private const TextureFormat Format = TextureFormat.Bgra8Unorm;
 
     public WgpuClearRenderer(Silk.NET.Core.Contexts.INativeWindowSource surfaceSource, FrameInfo frame)
     {
-        _wgpu = WebGPU.GetApi();
-
-        var instDesc = default(InstanceDescriptor);
-        _instance = _wgpu.CreateInstance(in instDesc);
-        if (_instance == null) throw new InvalidOperationException("wgpu CreateInstance failed");
-
-        _surface = surfaceSource.CreateWebGPUSurface(_wgpu, _instance);
-        if (_surface == null) throw new InvalidOperationException("wgpu surface creation failed");
-
-        Adapter* adapter = null;
-        var adapterOpts = new RequestAdapterOptions { CompatibleSurface = _surface, PowerPreference = PowerPreference.HighPerformance };
-        var aCb = PfnRequestAdapterCallback.From((status, a, _, _) => { if (status == RequestAdapterStatus.Success) adapter = a; });
-        _wgpu.InstanceRequestAdapter(_instance, in adapterOpts, aCb, null);
-        _adapter = adapter;
-        if (_adapter == null) throw new InvalidOperationException("no wgpu adapter");
-
-        Device* device = null;
-        var devDesc = default(DeviceDescriptor);
-        var dCb = PfnRequestDeviceCallback.From((status, d, _, _) => { if (status == RequestDeviceStatus.Success) device = d; });
-        _wgpu.AdapterRequestDevice(_adapter, in devDesc, dCb, null);
-        _device = device;
-        if (_device == null) throw new InvalidOperationException("no wgpu device");
-
-        _queue = _wgpu.DeviceGetQueue(_device);
-        Configure(frame.PixelWidth, frame.PixelHeight);
-    }
-
-    public void Configure(int pixelWidth, int pixelHeight)
-    {
-        var config = new SurfaceConfiguration
+        _gpu = GpuContext.Create(surfaceSource, surfaceOptions: new WindowSurfaceOptions
         {
-            Device = _device,
             Format = Format,
             // CopyDst: the HUD panel is copied into the acquired swapchain
             // texture (no shader pipeline in this sample). CopySrc: lets
             // --verify-hud read the final frame back for pixel assertions.
-            Usage = TextureUsage.RenderAttachment | TextureUsage.CopyDst | TextureUsage.CopySrc,
-            Width = (uint)Math.Max(1, pixelWidth),
-            Height = (uint)Math.Max(1, pixelHeight),
-            PresentMode = PresentMode.Fifo,
-            AlphaMode = CompositeAlphaMode.Auto,
-        };
-        _wgpu.SurfaceConfigure(_surface, in config);
-        _surfaceSize = (Math.Max(1, pixelWidth), Math.Max(1, pixelHeight));
+            ExtraUsage = TextureUsage.CopyDst | TextureUsage.CopySrc,
+        });
+        _gpu.UncapturedError += (type, msg) => Console.Error.WriteLine($"wgpu error ({type}): {msg}");
+        _surface = _gpu.Surface!;
+        Configure(frame.PixelWidth, frame.PixelHeight);
     }
 
-    private (int W, int H) _surfaceSize;
+    public void Configure(int pixelWidth, int pixelHeight) =>
+        _surface.Configure(pixelWidth, pixelHeight);
 
     // HUD panel kept in a persistent GPU texture. The pixels are uploaded
     // only when the text changes; every frame then copies texture→texture
@@ -174,111 +141,67 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
 
     public bool RenderClear(float r, float g, float b, string[] hudLines, float dpr, bool readbackHud = false)
     {
-        SurfaceTexture st = default;
-        _wgpu.SurfaceGetCurrentTexture(_surface, ref st);
-        if (st.Status != SurfaceGetCurrentTextureStatus.Success)
-            return false; // surface mid-reconfigure; next frame will succeed
+        if (!_surface.TryAcquireFrame())
+            return false; // swapchain stale; Skyline.Gpu reconfigured, retry next frame
 
         EnsureHudTexture(hudLines, dpr);
 
-        var view = _wgpu.TextureCreateView(st.Texture, (TextureViewDescriptor*)null);
+        var wgpu = _gpu.Api;
         var att = new RenderPassColorAttachment
         {
-            View = view,
+            View = _surface.CurrentView,
             LoadOp = LoadOp.Clear,
             StoreOp = StoreOp.Store,
             ClearValue = new Silk.NET.WebGPU.Color { R = r, G = g % 1f, B = b, A = 1.0 },
         };
         var passDesc = new RenderPassDescriptor { ColorAttachmentCount = 1, ColorAttachments = &att };
 
-        var enc = _wgpu.DeviceCreateCommandEncoder(_device, (CommandEncoderDescriptor*)null);
-        var pass = _wgpu.CommandEncoderBeginRenderPass(enc, in passDesc);
-        _wgpu.RenderPassEncoderEnd(pass);
-        _wgpu.RenderPassEncoderRelease(pass);
-        EncodeHudCopy(enc, st.Texture, dpr);
+        var enc = wgpu.DeviceCreateCommandEncoder(_gpu.DeviceHandle, (CommandEncoderDescriptor*)null);
+        var pass = wgpu.CommandEncoderBeginRenderPass(enc, in passDesc);
+        wgpu.RenderPassEncoderEnd(pass);
+        wgpu.RenderPassEncoderRelease(pass);
+        EncodeHudCopy(enc, _surface.CurrentTexture, dpr);
 
-        Silk.NET.WebGPU.Buffer* readback = null;
-        var rowPitch = 0;
+        TextureReadback? readback = null;
         if (readbackHud)
-            readback = EncodeReadback(enc, st.Texture, out rowPitch);
+        {
+            readback = new TextureReadback(_gpu, _surface.PixelSize.Width, _surface.PixelSize.Height);
+            readback.Encode(enc, _surface.CurrentTexture);
+        }
 
-        var cmd = _wgpu.CommandEncoderFinish(enc, (CommandBufferDescriptor*)null);
-        _wgpu.QueueSubmit(_queue, 1, &cmd);
-        _wgpu.CommandBufferRelease(cmd);
-        _wgpu.CommandEncoderRelease(enc);
+        var cmd = wgpu.CommandEncoderFinish(enc, (CommandBufferDescriptor*)null);
+        wgpu.QueueSubmit(_gpu.QueueHandle, 1, &cmd);
+        wgpu.CommandBufferRelease(cmd);
+        wgpu.CommandEncoderRelease(enc);
 
         if (readback != null)
         {
-            LastVerifyReport = CheckHudPixels(readback, rowPitch, dpr);
-            _wgpu.BufferRelease(readback);
+            LastVerifyReport = CheckHudPixels(readback.Resolve(), dpr);
+            readback.Dispose();
         }
 
-        _wgpu.SurfacePresent(_surface);
-        _wgpu.TextureViewRelease(view);
-        _wgpu.TextureRelease(st.Texture);
+        _surface.Present();
         return true;
     }
 
-    private Silk.NET.WebGPU.Buffer* EncodeReadback(CommandEncoder* enc, Texture* surfaceTexture, out int rowPitch)
+    private string CheckHudPixels(byte[] pixels, float dpr)
     {
-        // Copy the composed frame (clear + HUD) to a mappable buffer inside
-        // the same submission, so what we assert on is exactly what presents.
-        rowPitch = (_surfaceSize.W * 4 + 255) & ~255; // wgpu requires 256-byte row alignment
-        var desc = new BufferDescriptor
-        {
-            Size = (ulong)(rowPitch * _surfaceSize.H),
-            Usage = BufferUsage.MapRead | BufferUsage.CopyDst,
-        };
-        var buffer = _wgpu.DeviceCreateBuffer(_device, in desc);
-        var src = new ImageCopyTexture { Texture = surfaceTexture, MipLevel = 0, Origin = default, Aspect = TextureAspect.All };
-        var dst = new ImageCopyBuffer
-        {
-            Buffer = buffer,
-            Layout = new TextureDataLayout { Offset = 0, BytesPerRow = (uint)rowPitch, RowsPerImage = (uint)_surfaceSize.H },
-        };
-        var extent = new Extent3D { Width = (uint)_surfaceSize.W, Height = (uint)_surfaceSize.H, DepthOrArrayLayers = 1 };
-        _wgpu.CommandEncoderCopyTextureToBuffer(enc, in src, in dst, in extent);
-        return buffer;
-    }
-
-    private string CheckHudPixels(Silk.NET.WebGPU.Buffer* buffer, int rowPitch, float dpr)
-    {
-        var size = (nuint)(rowPitch * _surfaceSize.H);
-        var mapped = false;
-        var failed = false;
-        var cb = PfnBufferMapCallback.From((status, _) =>
-        {
-            if (status == BufferMapAsyncStatus.Success) mapped = true; else failed = true;
-        });
-        _wgpu.BufferMapAsync(buffer, MapMode.Read, 0, size, cb, null);
-
-        if (!_wgpu.TryGetDeviceExtension(null, out Wgpu native))
-            return "HUD VERIFY FAILED: wgpu-native poll extension unavailable";
-        while (!mapped && !failed)
-            native.DevicePoll(_device, true, null);
-        if (failed)
-            return "HUD VERIFY FAILED: buffer map failed";
-
-        var data = (byte*)_wgpu.BufferGetConstMappedRange(buffer, 0, size);
+        var (w, h) = _surface.PixelSize;
         var margin = (int)MathF.Round(16 * dpr);
 
         // Panel background probe: a point inside the panel's padding, which
         // TextOverlay fills with BGRA (24, 22, 20, 255).
-        var bx = margin + 6;
-        var by = margin + 6;
-        var bo = by * rowPitch + bx * 4;
-        var bgOk = data[bo] == 24 && data[bo + 1] == 22 && data[bo + 2] == 20;
+        var bo = ((margin + 6) * w + margin + 6) * 4;
+        var bgOk = pixels[bo] == 24 && pixels[bo + 1] == 22 && pixels[bo + 2] == 20;
 
         // Text probe: count near-white pixels across the panel area.
         var textPixels = 0;
-        for (var y = margin; y < Math.Min(margin + _hudSize.H, _surfaceSize.H); y++)
-        for (var x = margin; x < Math.Min(margin + _hudSize.W, _surfaceSize.W); x++)
+        for (var y = margin; y < Math.Min(margin + _hudSize.H, h); y++)
+        for (var x = margin; x < Math.Min(margin + _hudSize.W, w); x++)
         {
-            var o = y * rowPitch + x * 4;
-            if (data[o] > 200 && data[o + 1] > 200 && data[o + 2] > 200) textPixels++;
+            var o = (y * w + x) * 4;
+            if (pixels[o] > 200 && pixels[o + 1] > 200 && pixels[o + 2] > 200) textPixels++;
         }
-
-        _wgpu.BufferUnmap(buffer);
 
         return bgOk && textPixels > 100
             ? $"HUD VERIFY OK: panel background present, {textPixels} text pixels in frame"
@@ -292,10 +215,11 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
             return;
         _hudKey = key;
 
+        var wgpu = _gpu.Api;
         var (w, h, px) = HelloWindow.TextOverlay.Render(lines, (int)MathF.Round(2 * dpr));
         if (_hudTexture == null || _hudSize != (w, h))
         {
-            if (_hudTexture != null) _wgpu.TextureRelease(_hudTexture);
+            if (_hudTexture != null) wgpu.TextureRelease(_hudTexture);
             var desc = new TextureDescriptor
             {
                 Dimension = TextureDimension.Dimension2D,
@@ -305,7 +229,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
                 SampleCount = 1,
                 Usage = TextureUsage.CopyDst | TextureUsage.CopySrc,
             };
-            _hudTexture = _wgpu.DeviceCreateTexture(_device, in desc);
+            _hudTexture = wgpu.DeviceCreateTexture(_gpu.DeviceHandle, in desc);
             _hudSize = (w, h);
         }
 
@@ -315,15 +239,16 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         // This write is ordered before any later QueueSubmit, so the copy
         // encoded below always reads the up-to-date panel.
         fixed (byte* p = px)
-            _wgpu.QueueWriteTexture(_queue, in dst, p, (nuint)px.Length, in layout, in extent);
+            wgpu.QueueWriteTexture(_gpu.QueueHandle, in dst, p, (nuint)px.Length, in layout, in extent);
     }
 
     private void EncodeHudCopy(CommandEncoder* enc, Texture* surfaceTexture, float dpr)
     {
         if (_hudTexture == null)
             return;
+        var (sw, sh) = _surface.PixelSize;
         var margin = (int)MathF.Round(16 * dpr);
-        if (margin + _hudSize.W > _surfaceSize.W || margin + _hudSize.H > _surfaceSize.H)
+        if (margin + _hudSize.W > sw || margin + _hudSize.H > sh)
             return; // window too small for the panel; skip rather than clip
 
         var src = new ImageCopyTexture { Texture = _hudTexture, MipLevel = 0, Origin = default, Aspect = TextureAspect.All };
@@ -335,16 +260,12 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
             Aspect = TextureAspect.All,
         };
         var extent = new Extent3D { Width = (uint)_hudSize.W, Height = (uint)_hudSize.H, DepthOrArrayLayers = 1 };
-        _wgpu.CommandEncoderCopyTextureToTexture(enc, in src, in dst, in extent);
+        _gpu.Api.CommandEncoderCopyTextureToTexture(enc, in src, in dst, in extent);
     }
 
     public void Dispose()
     {
-        if (_hudTexture != null) _wgpu.TextureRelease(_hudTexture);
-        if (_surface != null) _wgpu.SurfaceRelease(_surface);
-        if (_queue != null) _wgpu.QueueRelease(_queue);
-        if (_device != null) _wgpu.DeviceRelease(_device);
-        if (_adapter != null) _wgpu.AdapterRelease(_adapter);
-        if (_instance != null) _wgpu.InstanceRelease(_instance);
+        if (_hudTexture != null) _gpu.Api.TextureRelease(_hudTexture);
+        _gpu.Dispose(); // disposes the surface too
     }
 }
