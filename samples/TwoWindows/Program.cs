@@ -89,7 +89,7 @@ internal sealed unsafe class WindowRenderer : IDisposable
             return false;
 
         // Pulse the clear color so motion is visible in both windows.
-        var pulse = 0.5f + 0.5f * MathF.Sin(_presented * 0.05f);
+        var pulse = 0.5f + 0.5f * MathF.Sin(_presented * 0.015f);
         var wgpu = _gpu.Api;
         var att = new RenderPassColorAttachment
         {
