@@ -3,11 +3,11 @@ using Silk.NET.WebGPU;
 namespace Skyline.Gpu;
 
 /// <summary>
-/// A window's swapchain, mirroring WebGPU's surface API: configure, acquire
-/// the current texture, present. The wrapper's value is the failure
-/// handling — a resize or display change invalidates the swapchain between
-/// frames, and <see cref="TryAcquireFrame"/> absorbs that by reconfiguring
-/// and skipping the frame instead of handing out a dead texture.
+/// A window's swapchain: configure, acquire the current texture, present.
+/// The wrapper's value is the failure handling. A resize or display change
+/// invalidates the swapchain between frames, and <see cref="TryAcquireFrame"/>
+/// absorbs that by reconfiguring and skipping the frame instead of handing
+/// out a dead texture.
 /// </summary>
 public sealed unsafe class WindowSurface : IDisposable
 {
@@ -57,13 +57,13 @@ public sealed unsafe class WindowSurface : IDisposable
     /// Acquire this frame's texture. On success, <see cref="CurrentTexture"/>
     /// and <see cref="CurrentView"/> are valid until <see cref="Present"/> or
     /// <see cref="CancelFrame"/>. Returns false when the swapchain is stale
-    /// (resized, occluded, timed out) — the surface reconfigures itself and
-    /// the caller should retry next frame. Throws when the device is gone.
+    /// (resized, occluded, timed out). The surface reconfigures itself, so
+    /// retry next frame. Throws when the device is gone.
     /// </summary>
     public bool TryAcquireFrame()
     {
         if (_texture != null)
-            throw new InvalidOperationException("frame already acquired; call Present or CancelFrame first");
+            throw new InvalidOperationException("frame already acquired. Call Present or CancelFrame first.");
 
         SurfaceTexture st = default;
         _context.Api.SurfaceGetCurrentTexture(_surface, ref st);

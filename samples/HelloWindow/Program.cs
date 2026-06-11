@@ -3,10 +3,10 @@ using Skyline;
 using Skyline.Gpu;
 using Skyline.Input;
 
-// The proof: Skyline owns the window, loop, and input; Skyline.Gpu owns the
-// device chain, swapchain, and present mechanics; this sample owns what it
-// draws — a clear pass and a HUD copy encoded with raw wgpu through
-// Skyline.Gpu's escape hatches.
+// The proof: Skyline owns the window, loop, and input. Skyline.Gpu owns the
+// device chain, swapchain, and present mechanics. This sample owns what it
+// draws — a clear pass and a heads-up display (HUD) panel copy, encoded
+// with raw wgpu through Skyline.Gpu's escape hatches.
 //
 // Move the pointer to steer the clear color, press Space to toggle a slow
 // hue cycle, press Escape to quit. Pass --frames N to auto-close after N
@@ -44,7 +44,7 @@ var presented = 0;
 win.Resized += f =>
 {
     gpu.Configure(f.PixelWidth, f.PixelHeight);
-    dirtyFrames = 30; // reconfigure discards surface contents; redraw
+    dirtyFrames = 30; // reconfigure discards surface contents, so redraw
 };
 
 win.PointerInput += e =>
@@ -79,7 +79,7 @@ win.RenderFrame += f =>
         $"R {r:0.00}   G {g:0.00}   B {b:0.00}   HUE {hue:0.00}",
     ];
     var isLast = maxFrames > 0 && presented == maxFrames - 1;
-    if (!gpu.RenderClear(r, g, b, hud, f.Dpr, readbackHud: verifyHud && isLast)) return; // stay dirty; retry next frame
+    if (!gpu.RenderClear(r, g, b, hud, f.Dpr, readbackHud: verifyHud && isLast)) return; // stay dirty and retry next frame
     if (verifyHud && isLast) verifyReport = gpu.LastVerifyReport;
     if (dirtyFrames > 0) dirtyFrames--;
     presented++;
@@ -97,7 +97,7 @@ return presented > 0 ? code : 1;
 
 /// <summary>
 /// The sample's renderer. Skyline.Gpu provides the device, swapchain, and
-/// present; this class encodes its own work — a clear pass plus the HUD
+/// present. This class encodes its own work — a clear pass plus the HUD
 /// texture copy — with raw wgpu via the escape hatches. This is the part a
 /// real app would replace with its own engine.
 /// </summary>
@@ -126,7 +126,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         _surface.Configure(pixelWidth, pixelHeight);
 
     // HUD panel kept in a persistent GPU texture. The pixels are uploaded
-    // only when the text changes; every frame then copies texture→texture
+    // only when the text changes. Every frame then copies texture→texture
     // inside the same command submission as the clear pass. Folding the
     // copy into the submitted encoder is what guarantees the HUD lands on
     // the frame being presented — a bare QueueWriteTexture is allowed to
@@ -249,7 +249,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         var (sw, sh) = _surface.PixelSize;
         var margin = (int)MathF.Round(16 * dpr);
         if (margin + _hudSize.W > sw || margin + _hudSize.H > sh)
-            return; // window too small for the panel; skip rather than clip
+            return; // window too small for the panel, so skip rather than clip
 
         var src = new ImageCopyTexture { Texture = _hudTexture, MipLevel = 0, Origin = default, Aspect = TextureAspect.All };
         var dst = new ImageCopyTexture

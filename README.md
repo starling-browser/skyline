@@ -1,9 +1,13 @@
 # Skyline
 
-A native window with OS chrome, an event loop, and input — plus an optional
-WebGPU layer that owns the device chain, swapchain, and present mechanics.
-The core library has no rendering opinion. Skyline.Gpu has exactly one:
-WebGPU, mirrored rather than abstracted.
+A WebGPU-first window and GPU library for .NET. Skyline owns the native
+window, the event loop, input, and the WebGPU device and swapchain. You
+write the rendering.
+
+Skyline targets WebGPU. The window host is a separate project with no
+graphics dependency, and its native handle works with any API that can
+build a swapchain — but WebGPU is the path Skyline builds for, tests,
+and ships.
 
 ```csharp
 using var win = new AppWindow(new() { Title = "hello" });
@@ -12,14 +16,14 @@ using var gpu = GpuContext.Create(win.Surface);
 win.Resized     += f => gpu.Surface!.Configure(f.PixelWidth, f.PixelHeight);
 win.RenderFrame += f =>
 {
-    if (!gpu.Surface!.TryAcquireFrame()) return;   // stale swapchain; retry next frame
+    if (!gpu.Surface!.TryAcquireFrame()) return;   // stale swapchain, retry next frame
     // encode passes against gpu.Surface.CurrentView with raw wgpu (gpu.Api)
     gpu.Surface.Present();
 };
 return win.Run();
 ```
 
-## What Skyline owns
+## What the window host owns
 
 - Window creation with OS chrome (GLFW via Silk.NET) and DPI tracking.
 - The event loop, with dirty-frame pacing (`IsDirty`). Idle apps sleep
@@ -28,10 +32,11 @@ return win.Run();
   types leak into your code.
 - Clipboard text.
 
-The core library never touches a pixel. The render callback gives you frame
+The window host never touches a pixel. The render callback gives you frame
 geometry and timing. The window's native handle stays available through
-`AppWindow.Surface` (Silk.NET's `INativeWindowSource`), so any presenter —
-Vulkan, Metal, OpenGL — can plug in without Skyline.Gpu.
+`AppWindow.Surface` (Silk.NET's `INativeWindowSource`), so a Vulkan, Metal,
+or OpenGL presenter can plug in without Skyline.Gpu — supported as an
+escape hatch, not a target.
 
 ## What Skyline.Gpu owns
 
@@ -73,9 +78,9 @@ themselves.
 
 ## Sample: HelloWindow
 
-A Skyline window plus a clear-color renderer: Skyline.Gpu does setup and
-present, the sample encodes its clear pass and HUD copy with raw wgpu
-through the escape hatches. An on-screen panel shows the controls and the
+A Skyline window plus a clear-color renderer. Skyline.Gpu does setup and
+present. The sample encodes its clear pass and overlay copy with raw wgpu
+through the escape hatches. The on-screen panel shows the controls and the
 live color values.
 
 - Move the pointer to steer the color.

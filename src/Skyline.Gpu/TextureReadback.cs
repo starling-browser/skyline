@@ -6,10 +6,10 @@ namespace Skyline.Gpu;
 /// <summary>
 /// Read a texture's pixels back to the processor — for screenshots and
 /// pixel-asserting tests, not per-frame work. The copy must be encoded into
-/// the same command submission that produced the texture: a copy submitted
-/// later is allowed to miss work that was still queued, which is exactly the
-/// bug this type exists to prevent. So the flow is split: <see cref="Encode"/>
-/// inside your encoder, submit, then <see cref="Resolve"/>.
+/// the same command submission that produced the texture. A copy submitted
+/// later is allowed to miss work that was still queued. So the flow is
+/// split: <see cref="Encode"/> inside your encoder, submit, then
+/// <see cref="Resolve"/>.
 /// </summary>
 public sealed unsafe class TextureReadback : IDisposable
 {

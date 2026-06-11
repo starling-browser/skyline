@@ -7,10 +7,9 @@ namespace Skyline.Gpu;
 
 /// <summary>
 /// The WebGPU init chain — instance, adapter, device, queue — plus device
-/// error routing and polling. Skyline.Gpu mirrors WebGPU rather than
-/// abstracting it: this class owns setup and lifetime, and every raw handle
-/// stays reachable (<see cref="Api"/>, <see cref="DeviceHandle"/>, …) so a
-/// consumer can drop to wgpu for everything the wrapper doesn't do.
+/// error routing and polling. This class owns setup and lifetime. Every raw
+/// handle stays reachable (<see cref="Api"/>, <see cref="DeviceHandle"/>, …)
+/// so a consumer can drop to wgpu for anything the wrapper doesn't do.
 /// </summary>
 public sealed unsafe class GpuContext : IDisposable
 {
@@ -24,7 +23,7 @@ public sealed unsafe class GpuContext : IDisposable
     private bool _disposed;
 
     // The callbacks are native function pointers into these delegates. The
-    // fields keep the delegates alive for the device's lifetime; without
+    // fields keep the delegates alive for the device's lifetime. Without
     // them the garbage collector may collect a delegate while wgpu still
     // holds its pointer.
     private readonly PfnErrorCallback _errorCallback;

@@ -22,11 +22,14 @@ public readonly record struct PointerEvent(
     float WheelDy);
 
 /// <summary>
-/// One key transition. <see cref="Key"/> covers the common keys;
+/// One key transition. <see cref="Key"/> covers the common keys.
 /// <see cref="Code"/> is the raw GLFW keycode for everything else.
 /// Printable text arrives separately via <see cref="TextEvent"/>.
 /// </summary>
 public readonly record struct KeyEvent(bool IsDown, Key Key, int Code);
 
-/// <summary>A committed text character (post layout/IME, unlike raw keycodes).</summary>
+/// <summary>
+/// A committed text character — what the user typed, after keyboard layout
+/// and input-method composition. Use this for text entry, not raw keycodes.
+/// </summary>
 public readonly record struct TextEvent(char Character);
