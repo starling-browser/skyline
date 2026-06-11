@@ -9,6 +9,27 @@ graphics dependency, and its native handle works with any API that can
 build a swapchain — but WebGPU is the path Skyline builds for, tests,
 and ships.
 
+> **What's a swapchain?** The small set of textures the OS flips between
+> to put your frames on screen. You draw into one while the last one is
+> displayed. Vulkan, Metal, and Direct3D 12 can each build their own
+> swapchain from the same window handle, so a presenter on any of them
+> would also work here.
+
+```
+┌─────────────────────────────────────────┐
+│            your application             │
+│       (pipelines, passes, draws)        │
+├─────────────────────┬───────────────────┤
+│  Skyline            │  Skyline.Gpu      │
+│  window, loop,      │  device, swap-    │
+│  input, clipboard   │  chain, present   │
+├─────────────────────┴───────────────────┤
+│       Silk.NET  (GLFW · WebGPU)         │
+├─────────────────────────────────────────┤
+│  wgpu-native → Metal / Vulkan / DX12    │
+└─────────────────────────────────────────┘
+```
+
 ```csharp
 using var win = new AppWindow(new() { Title = "hello" });
 using var gpu = GpuContext.Create(win.Surface);
@@ -51,7 +72,25 @@ The parts of WebGPU every app rewrites, and nothing more:
   (`TextureReadback`), encoded into your own submission so what you read
   is exactly what presented.
 
-The design rule: **mirror WebGPU, don't abstract it.** Skyline.Gpu uses
+One frame looks like this:
+
+```
+RenderFrame event (Skyline)
+        │
+        ▼
+TryAcquireFrame ──false──▶ surface reconfigures, frame skipped,
+        │ true             retried next frame
+        ▼
+encode passes against CurrentView      ◀── your code, raw wgpu
+        │
+        ▼
+submit, then Present (Skyline.Gpu)
+```
+
+The design rule: **mirror WebGPU, don't abstract it.** WebGPU is already
+the portability layer — one spec, many implementations. A second
+abstraction on top would add a vocabulary to learn and hide capability,
+without adding any portability. So Skyline.Gpu uses
 WebGPU's own vocabulary (Silk.NET types in options, raw handles via
 `GpuContext.Api`, `DeviceHandle`, `WindowSurface.CurrentView`, …) and wraps
 no encoder, pipeline, or draw call. Everything past setup and present is
