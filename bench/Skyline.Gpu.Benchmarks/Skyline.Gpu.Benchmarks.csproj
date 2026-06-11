@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Skyline.Gpu.Benchmarks</RootNamespace>
+    <!-- Benchmarks drive raw wgpu submits to get a no-pacer baseline. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Skyline.Gpu\Skyline.Gpu.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <!-- The benchmark host ships its own wgpu binary, like any app. -->
+    <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
+  </ItemGroup>
+</Project>

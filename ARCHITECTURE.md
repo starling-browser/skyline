@@ -30,6 +30,10 @@ Two projects:
   apps reference `Silk.NET.WebGPU.Native.WGPU` (or another
   implementation) themselves.
 
+There is also `bench/Skyline.Gpu.Benchmarks` — BenchmarkDotNet checks on
+the performance claims below. Run it with
+`dotnet run -c Release --project bench/Skyline.Gpu.Benchmarks`.
+
 Skyline targets WebGPU. The window host's native handle works with any
 API that can build a swapchain, and a Vulkan, Metal, or OpenGL presenter
 can plug in without Skyline.Gpu — supported as an escape hatch, not a
@@ -159,4 +163,10 @@ once and reused — never allocated per frame. Steady-state cost per frame
 is one native call and two interlocked operations. The callback frees
 its slot on every completion status, including device loss, so `Wait`
 cannot hang on a dead device. Like `TextureReadback`, it needs the
-wgpu-native poll extension.
+wgpu-native poll extension, and the constructor fails fast without it.
+
+Measured (BenchmarkDotNet, M-series Mac, empty submits to a headless
+device): the bookkeeping adds about 60 nanoseconds to a 3.5 microsecond
+submit, with zero managed allocation. With the cap engaged the loop sits
+in `Wait` for the GPU's actual completion time — that is the
+backpressure working, not overhead.

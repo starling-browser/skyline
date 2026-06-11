@@ -50,11 +50,19 @@ public sealed unsafe class WindowSurface : IDisposable
     {
         SurfaceCapabilities caps = default;
         _context.Api.SurfaceGetCapabilities(_surface, _context.AdapterHandle, ref caps);
-        var formats = new ReadOnlySpan<TextureFormat>(caps.Formats, (int)caps.FormatCount).ToArray();
-        var modes = new ReadOnlySpan<PresentMode>(caps.PresentModes, (int)caps.PresentModeCount).ToArray();
-        var alphas = new ReadOnlySpan<CompositeAlphaMode>(caps.AlphaModes, (int)caps.AlphaModeCount).ToArray();
-        _context.Api.SurfaceCapabilitiesFreeMembers(caps);
-        return new WindowSurfaceCapabilities(formats, modes, alphas);
+        try
+        {
+            var formats = new ReadOnlySpan<TextureFormat>(caps.Formats, (int)caps.FormatCount).ToArray();
+            var modes = new ReadOnlySpan<PresentMode>(caps.PresentModes, (int)caps.PresentModeCount).ToArray();
+            var alphas = new ReadOnlySpan<CompositeAlphaMode>(caps.AlphaModes, (int)caps.AlphaModeCount).ToArray();
+            return new WindowSurfaceCapabilities(formats, modes, alphas);
+        }
+        finally
+        {
+            // The native arrays are wgpu allocations and must be freed even
+            // if a managed copy throws.
+            _context.Api.SurfaceCapabilitiesFreeMembers(caps);
+        }
     }
 
     /// <summary>

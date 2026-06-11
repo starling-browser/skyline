@@ -30,6 +30,11 @@ public sealed unsafe class FramePacer : IDisposable
     {
         if (maxFramesInFlight < 1)
             throw new ArgumentOutOfRangeException(nameof(maxFramesInFlight), "at least one frame must be allowed in flight");
+        // Fail before any callback is registered: without polling, Wait
+        // could never pump completions and Dispose could never drain, so a
+        // registered callback could outlive the pacer.
+        if (!context.SupportsPoll)
+            throw new InvalidOperationException("frame pacing requires the wgpu-native poll extension");
         _context = context;
         MaxFramesInFlight = maxFramesInFlight;
         // Decrement on every status, not just Success: an error or device
@@ -50,10 +55,7 @@ public sealed unsafe class FramePacer : IDisposable
     public void Wait()
     {
         while (Volatile.Read(ref _inFlight) >= MaxFramesInFlight)
-        {
-            if (!_context.Poll(wait: true))
-                throw new InvalidOperationException("frame pacing requires the wgpu-native poll extension");
-        }
+            _context.Poll(wait: true);
     }
 
     /// <summary>
@@ -81,9 +83,10 @@ public sealed unsafe class FramePacer : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        // Drain so no callback fires into a disposed pacer. Poll failure
-        // means no extension, which means no callbacks were registered.
-        while (Volatile.Read(ref _inFlight) > 0 && _context.Poll(wait: true)) { }
+        // Drain so no callback fires into a disposed pacer. The constructor
+        // guarantees polling exists, so this always terminates.
+        while (Volatile.Read(ref _inFlight) > 0)
+            _context.Poll(wait: true);
         _onWorkDone.Dispose();
     }
 }
