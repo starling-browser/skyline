@@ -69,11 +69,7 @@ public sealed unsafe class GpuContext : IDisposable
         if (instance == null) throw new InvalidOperationException("wgpu CreateInstance failed");
 
         var surface = window.CreateWebGPUSurface(wgpu, instance);
-        if (surface == null)
-        {
-            wgpu.InstanceRelease(instance);
-            throw new InvalidOperationException("wgpu surface creation failed");
-        }
+        if (surface == null) Guard.FailSurfaceCreation(wgpu, instance);
 
         // Adapter and device requests resolve synchronously in wgpu-native,
         // so the chain reads straight-line.
@@ -111,12 +107,12 @@ public sealed unsafe class GpuContext : IDisposable
         };
         var cb = PfnRequestAdapterCallback.From((status, a, message, _) =>
         {
+            // The message pointer is null on success, which marshals to null.
             if (status == RequestAdapterStatus.Success) adapter = a;
-            else error = Marshal.PtrToStringUTF8((nint)message);
+            error = Marshal.PtrToStringUTF8((nint)message);
         });
         wgpu.InstanceRequestAdapter(instance, in opts, cb, null);
-        if (adapter == null)
-            throw new InvalidOperationException($"no wgpu adapter: {error ?? "unknown"}");
+        if (adapter == null) Guard.FailInit("no wgpu adapter", error);
         return adapter;
     }
 
@@ -127,11 +123,10 @@ public sealed unsafe class GpuContext : IDisposable
         var cb = PfnRequestDeviceCallback.From((status, d, message, _) =>
         {
             if (status == RequestDeviceStatus.Success) device = d;
-            else error = Marshal.PtrToStringUTF8((nint)message);
+            error = Marshal.PtrToStringUTF8((nint)message);
         });
         wgpu.AdapterRequestDevice(adapter, in desc, cb, null);
-        if (device == null)
-            throw new InvalidOperationException($"no wgpu device: {error ?? "unknown"}");
+        if (device == null) Guard.FailInit("no wgpu device", error);
         return device;
     }
 

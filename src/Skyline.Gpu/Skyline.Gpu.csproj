@@ -6,8 +6,10 @@
     <Description>WebGPU device, surface, and present mechanics for Skyline windows. Mirrors WebGPU rather than abstracting it — raw handles stay reachable.</Description>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Lets benchmarks build a WindowSurfaceCapabilities without a window. -->
+    <!-- Lets benchmarks and tests build a WindowSurfaceCapabilities without a window. -->
     <InternalsVisibleTo Include="Skyline.Gpu.Benchmarks" />
+    <InternalsVisibleTo Include="Skyline.Gpu.Tests" />
+    <InternalsVisibleTo Include="Skyline.WindowedTests" />
   </ItemGroup>
   <!-- No reference to src/Skyline: the seam is Silk.NET's INativeWindowSource,
        which AppWindow.Surface exposes. Any window source works. -->

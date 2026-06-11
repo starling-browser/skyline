@@ -60,18 +60,16 @@ public sealed unsafe class TextureReadback : IDisposable
         var failed = false;
         var cb = PfnBufferMapCallback.From((status, _) =>
         {
-            if (status == BufferMapAsyncStatus.Success) mapped = true;
-            else failed = true;
+            mapped = status == BufferMapAsyncStatus.Success;
+            failed = !mapped;
         });
         _context.Api.BufferMapAsync(_buffer, MapMode.Read, 0, size, cb, null);
 
         while (!mapped && !failed)
         {
-            if (!_context.Poll(wait: true))
-                throw new InvalidOperationException("texture readback requires the wgpu-native poll extension");
+            if (!_context.Poll(wait: true)) Guard.FailPollRequired("texture readback");
         }
-        if (failed)
-            throw new InvalidOperationException("readback buffer map failed");
+        if (failed) Guard.FailMap();
 
         var data = (byte*)_context.Api.BufferGetConstMappedRange(_buffer, 0, size);
         var pixels = new byte[_width * _height * 4];

@@ -81,10 +81,13 @@ public sealed class AppHost : IDisposable
         {
             while (_slots.Count > 0)
             {
-                // One global pump serves all windows. The timeout is a safety
-                // net for state only visible by polling; input still wakes the
-                // loop instantly, and Wake() covers cross-thread requests.
-                _glfw.WaitEventsTimeout(0.05);
+                // One global pump serves all windows. Poll plus a short
+                // sleep, not WaitEventsTimeout: on macOS, event bursts
+                // (window animations) overran the wait's timeout by
+                // hundreds of milliseconds and PostEmptyEvent did not
+                // interrupt it, so waiting gave Invoke unbounded latency.
+                // Polling bounds it at the sleep below.
+                _glfw.PollEvents();
 
                 while (_invokes.TryDequeue(out var action))
                     action();
@@ -94,6 +97,8 @@ public sealed class AppHost : IDisposable
                     if (_slots[i].Window.IsClosing)
                         Retire(_slots[i]);
                 }
+
+                Thread.Sleep(2);
             }
         }
         finally

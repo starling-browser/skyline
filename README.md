@@ -68,6 +68,28 @@ Two windows on one device, each with its own render thread:
 dotnet run --project samples/TwoWindows
 ```
 
+## Tests
+
+Both libraries are at 100% line coverage, from three vehicles:
+
+- `tests/Skyline.Tests` and `tests/Skyline.Gpu.Tests` — MSTest, headless.
+  The GPU tests run against a real device with no window.
+- `tests/Skyline.WindowedTests` — a console harness for everything that
+  needs a real window. GLFW requires the main thread on macOS, and test
+  runners execute on worker threads, so these checks run as a plain
+  program with an exit code.
+
+Run everything and get the merged report:
+
+```sh
+./tools/cover.sh
+```
+
+The only excluded lines are native-failure guards (no GPU adapter, no
+device, surface creation refused) collected in `Skyline.Gpu/Guard.cs` —
+they cannot fire on a working machine, and the exclusion is documented
+there.
+
 ## Requirements
 
 - .NET 10 SDK or later.

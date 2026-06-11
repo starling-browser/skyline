@@ -33,8 +33,7 @@ public sealed unsafe class FramePacer : IDisposable
         // Fail before any callback is registered: without polling, Wait
         // could never pump completions and Dispose could never drain, so a
         // registered callback could outlive the pacer.
-        if (!context.SupportsPoll)
-            throw new InvalidOperationException("frame pacing requires the wgpu-native poll extension");
+        if (!context.SupportsPoll) Guard.FailPollRequired("frame pacing");
         _context = context;
         MaxFramesInFlight = maxFramesInFlight;
         // Decrement on every status, not just Success: an error or device

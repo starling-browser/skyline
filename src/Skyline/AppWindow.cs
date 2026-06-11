@@ -104,25 +104,27 @@ public sealed class AppWindow : IDisposable
         _input = _window.CreateInput();
         foreach (var mouse in _input.Mice)
         {
-            mouse.MouseMove += (_, pos) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0));
-            mouse.MouseDown += (m, btn) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.MouseUp += (m, btn) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.Scroll += (m, wheel) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y));
+            mouse.MouseMove += (_, pos) => RaisePointer(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0);
+            mouse.MouseDown += (m, btn) => RaisePointer(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0);
+            mouse.MouseUp += (m, btn) => RaisePointer(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0);
+            mouse.Scroll += (m, wheel) => RaisePointer(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y);
         }
         foreach (var keyboard in _input.Keyboards)
         {
-            keyboard.KeyDown += (_, k, code) =>
-                KeyInput?.Invoke(new KeyEvent(true, MapKey(k), (int)k));
-            keyboard.KeyUp += (_, k, code) =>
-                KeyInput?.Invoke(new KeyEvent(false, MapKey(k), (int)k));
-            keyboard.KeyChar += (_, ch) =>
-                TextInput?.Invoke(new TextEvent(ch));
+            keyboard.KeyDown += (_, k, _) => RaiseKey(true, k);
+            keyboard.KeyUp += (_, k, _) => RaiseKey(false, k);
+            keyboard.KeyChar += (_, ch) => RaiseText(ch);
         }
     }
+
+    internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
+        PointerInput?.Invoke(new PointerEvent(kind, x, y, button, wheelDx, wheelDy));
+
+    internal void RaiseKey(bool isDown, Silk.NET.Input.Key key) =>
+        KeyInput?.Invoke(new KeyEvent(isDown, MapKey(key), (int)key));
+
+    internal void RaiseText(char character) =>
+        TextInput?.Invoke(new TextEvent(character));
 
     /// <summary>
     /// The native window as a surface source. Hand this to your renderer
@@ -178,6 +180,28 @@ public sealed class AppWindow : IDisposable
     /// </summary>
     public void RequestRedraw() => _redraw.Set();
 
+    /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
+    public void Resize(int width, int height) => _window.Size = new Vector2D<int>(width, height);
+
+    /// <summary>Minimize the window. Main thread only.</summary>
+    public void Minimize()
+    {
+        // Record the state now: macOS reports the change only after the
+        // minimize animation, and a hosted render thread must stop touching
+        // the swapchain before that.
+        _minimized = true;
+        _window.WindowState = WindowState.Minimized;
+        RequestRedraw();
+    }
+
+    /// <summary>Restore the window from minimized. Main thread only.</summary>
+    public void Restore()
+    {
+        _minimized = false;
+        _window.WindowState = WindowState.Normal;
+        RequestRedraw();
+    }
+
     /// <summary>
     /// Process pending OS events once, without the built-in loop. For
     /// consumers that drive their own frame loop — engines, benchmarks —
@@ -221,7 +245,7 @@ public sealed class AppWindow : IDisposable
 
     internal void RaiseResized(FrameInfo frame) => Resized?.Invoke(frame);
 
-    private static Input.Key MapKey(Silk.NET.Input.Key k)
+    internal static Input.Key MapKey(Silk.NET.Input.Key k)
     {
         // Silk.NET.Input.Key values are GLFW keycodes, which Skyline's enum
         // mirrors. Anything outside the defined set reports Unknown but keeps

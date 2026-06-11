@@ -430,3 +430,6 @@ FodyWeavers.xsd
 
 # macOS
 .DS_Store
+
+# test coverage output
+coverage/
