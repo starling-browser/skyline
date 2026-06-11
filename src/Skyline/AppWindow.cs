@@ -61,22 +61,30 @@ public sealed class AppWindow : IDisposable
         {
             if (sz.X <= 0 || sz.Y <= 0) return;
             var g = new FrameGeom(sz.X, sz.Y, _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _geom.Dpr);
-            _geom = g;
             if (Host is null)
             {
+                _geom = g;
                 Resized?.Invoke(Frame(0));
             }
             else
             {
                 // Hosted windows reconfigure their swapchain on their render
                 // thread, never mid-frame: park the resize until the next
-                // frame starts.
+                // frame starts. _geom advances only when the resize is
+                // consumed, so a frame never reports dimensions its
+                // swapchain doesn't have yet.
                 _pendingResize = g;
                 RequestRedraw();
             }
         };
 
-        _window.StateChanged += state => _minimized = state == WindowState.Minimized;
+        _window.StateChanged += state =>
+        {
+            _minimized = state == WindowState.Minimized;
+            // Wake the render thread so a restore resumes immediately
+            // instead of after the idle wait.
+            RequestRedraw();
+        };
 
         _window.Render += delta =>
         {
@@ -206,6 +214,7 @@ public sealed class AppWindow : IDisposable
             frame = default;
             return false;
         }
+        _geom = g;
         frame = new FrameInfo(g.PixelWidth, g.PixelHeight, g.Dpr, 0);
         return true;
     }

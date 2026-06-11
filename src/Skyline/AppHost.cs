@@ -35,7 +35,11 @@ public sealed class AppHost : IDisposable
     private bool _running;
     private bool _disposed;
 
-    /// <summary>Fired on the main thread after a window closes and is disposed.</summary>
+    /// <summary>
+    /// Fired on the main thread after a window's render thread has stopped,
+    /// just before the host disposes the window. Release the window's GPU
+    /// surfaces here, while the native window still exists.
+    /// </summary>
     public event Action<AppWindow>? WindowClosed;
 
     /// <summary>
@@ -73,24 +77,34 @@ public sealed class AppHost : IDisposable
         foreach (var slot in _slots.Where(s => s.Thread is null))
             StartRenderThread(slot);
 
-        while (_slots.Count > 0)
+        try
         {
-            // One global pump serves all windows. The timeout is a safety
-            // net for state only visible by polling; input still wakes the
-            // loop instantly, and Wake() covers cross-thread requests.
-            _glfw.WaitEventsTimeout(0.05);
-
-            while (_invokes.TryDequeue(out var action))
-                action();
-
-            for (var i = _slots.Count - 1; i >= 0; i--)
+            while (_slots.Count > 0)
             {
-                if (_slots[i].Window.IsClosing)
-                    Retire(_slots[i]);
+                // One global pump serves all windows. The timeout is a safety
+                // net for state only visible by polling; input still wakes the
+                // loop instantly, and Wake() covers cross-thread requests.
+                _glfw.WaitEventsTimeout(0.05);
+
+                while (_invokes.TryDequeue(out var action))
+                    action();
+
+                for (var i = _slots.Count - 1; i >= 0; i--)
+                {
+                    if (_slots[i].Window.IsClosing)
+                        Retire(_slots[i]);
+                }
             }
         }
+        finally
+        {
+            // A throwing Invoke action must not leak render threads or
+            // native windows: retire whatever is still open.
+            for (var i = _slots.Count - 1; i >= 0; i--)
+                Retire(_slots[i]);
+            _running = false;
+        }
 
-        _running = false;
         return 0;
     }
 
