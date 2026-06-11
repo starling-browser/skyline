@@ -102,6 +102,14 @@ public sealed unsafe class WindowSurface : IDisposable
 
         SurfaceTexture st = default;
         _context.Api.SurfaceGetCurrentTexture(_surface, ref st);
+        return HandleAcquireResult(st);
+    }
+
+    // Split from TryAcquireFrame so the stale and failure paths are
+    // testable: the OS decides when a swapchain goes stale, but the
+    // handling must work whenever it does.
+    internal bool HandleAcquireResult(SurfaceTexture st)
+    {
         switch (st.Status)
         {
             case SurfaceGetCurrentTextureStatus.Success:

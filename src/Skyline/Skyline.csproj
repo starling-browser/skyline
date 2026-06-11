@@ -6,6 +6,10 @@
     <Description>A native window with OS chrome, an event loop, input, and a surface handle. Pairs with Skyline.Gpu for WebGPU, or bring your own presenter.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="Skyline.Tests" />
+    <InternalsVisibleTo Include="Skyline.WindowedTests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="Silk.NET.Windowing.Common" />
     <PackageReference Include="Silk.NET.Windowing.Glfw" />
     <PackageReference Include="Silk.NET.Input.Common" />

@@ -69,11 +69,7 @@ public sealed unsafe class GpuContext : IDisposable
         if (instance == null) throw new InvalidOperationException("wgpu CreateInstance failed");
 
         var surface = window.CreateWebGPUSurface(wgpu, instance);
-        if (surface == null)
-        {
-            wgpu.InstanceRelease(instance);
-            throw new InvalidOperationException("wgpu surface creation failed");
-        }
+        if (surface == null) Guard.FailSurfaceCreation(wgpu, instance);
 
         // Adapter and device requests resolve synchronously in wgpu-native,
         // so the chain reads straight-line.
@@ -111,12 +107,12 @@ public sealed unsafe class GpuContext : IDisposable
         };
         var cb = PfnRequestAdapterCallback.From((status, a, message, _) =>
         {
+            // The message pointer is null on success, which marshals to null.
             if (status == RequestAdapterStatus.Success) adapter = a;
-            else error = Marshal.PtrToStringUTF8((nint)message);
+            error = Marshal.PtrToStringUTF8((nint)message);
         });
         wgpu.InstanceRequestAdapter(instance, in opts, cb, null);
-        if (adapter == null)
-            throw new InvalidOperationException($"no wgpu adapter: {error ?? "unknown"}");
+        if (adapter == null) Guard.FailInit("no wgpu adapter", error);
         return adapter;
     }
 
@@ -127,16 +123,28 @@ public sealed unsafe class GpuContext : IDisposable
         var cb = PfnRequestDeviceCallback.From((status, d, message, _) =>
         {
             if (status == RequestDeviceStatus.Success) device = d;
-            else error = Marshal.PtrToStringUTF8((nint)message);
+            error = Marshal.PtrToStringUTF8((nint)message);
         });
         wgpu.AdapterRequestDevice(adapter, in desc, cb, null);
-        if (device == null)
-            throw new InvalidOperationException($"no wgpu device: {error ?? "unknown"}");
+        if (device == null) Guard.FailInit("no wgpu device", error);
         return device;
     }
 
     /// <summary>The window surface, when built via <see cref="Create"/>. Null for headless contexts.</summary>
     public WindowSurface? Surface => _surface;
+
+    /// <summary>
+    /// Build a surface for another window on this same device. One device
+    /// serves any number of windows — multi-window apps should share one
+    /// context rather than building a chain per window. The caller owns
+    /// the returned surface and disposes it before this context.
+    /// </summary>
+    public WindowSurface CreateSurface(INativeWindowSource window, WindowSurfaceOptions? options = null)
+    {
+        var surface = window.CreateWebGPUSurface(_wgpu, _instance);
+        if (surface == null) throw new InvalidOperationException("wgpu surface creation failed");
+        return new WindowSurface(this, surface, options ?? new WindowSurfaceOptions());
+    }
 
     /// <summary>A validation or out-of-memory error wgpu could not attribute to an error scope.</summary>
     public event Action<ErrorType, string?>? UncapturedError;

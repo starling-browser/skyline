@@ -20,8 +20,16 @@ public sealed class AppWindow : IDisposable
     private readonly IInputContext _input;
     private readonly Glfw _glfw;
     private readonly unsafe WindowHandle* _glfwHandle;
-    private float _dpr;
-    private Vector2D<int> _lastFb;
+
+    // Frame geometry as one immutable object: the main thread writes it on
+    // resize, a render thread reads it mid-frame. Swapping a reference is
+    // atomic; updating two plain fields is not.
+    private sealed record FrameGeom(int PixelWidth, int PixelHeight, float Dpr);
+    private volatile FrameGeom _geom = new(1, 1, 1f);
+    private volatile FrameGeom? _pendingResize;
+    private volatile bool _minimized;
+    private readonly AutoResetEvent _redraw = new(false);
+    internal AppHost? Host;
 
     public unsafe AppWindow(AppWindowOptions? options = null)
     {
@@ -42,8 +50,8 @@ public sealed class AppWindow : IDisposable
         });
         _window.Initialize();
 
-        _dpr = _window.Size.X > 0 ? (float)_window.FramebufferSize.X / _window.Size.X : 1f;
-        _lastFb = _window.FramebufferSize;
+        var dpr = _window.Size.X > 0 ? (float)_window.FramebufferSize.X / _window.Size.X : 1f;
+        _geom = new FrameGeom(_window.FramebufferSize.X, _window.FramebufferSize.Y, dpr);
 
         _glfw = Glfw.GetApi();
         _glfwHandle = (WindowHandle*)(_window.Native?.Glfw
@@ -52,9 +60,30 @@ public sealed class AppWindow : IDisposable
         _window.FramebufferResize += sz =>
         {
             if (sz.X <= 0 || sz.Y <= 0) return;
-            _dpr = _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _dpr;
-            _lastFb = sz;
-            Resized?.Invoke(Frame(0));
+            var g = new FrameGeom(sz.X, sz.Y, _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _geom.Dpr);
+            if (Host is null)
+            {
+                _geom = g;
+                Resized?.Invoke(Frame(0));
+            }
+            else
+            {
+                // Hosted windows reconfigure their swapchain on their render
+                // thread, never mid-frame: park the resize until the next
+                // frame starts. _geom advances only when the resize is
+                // consumed, so a frame never reports dimensions its
+                // swapchain doesn't have yet.
+                _pendingResize = g;
+                RequestRedraw();
+            }
+        };
+
+        _window.StateChanged += state =>
+        {
+            _minimized = state == WindowState.Minimized;
+            // Wake the render thread so a restore resumes immediately
+            // instead of after the idle wait.
+            RequestRedraw();
         };
 
         _window.Render += delta =>
@@ -75,25 +104,27 @@ public sealed class AppWindow : IDisposable
         _input = _window.CreateInput();
         foreach (var mouse in _input.Mice)
         {
-            mouse.MouseMove += (_, pos) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0));
-            mouse.MouseDown += (m, btn) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.MouseUp += (m, btn) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.Scroll += (m, wheel) =>
-                PointerInput?.Invoke(new PointerEvent(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y));
+            mouse.MouseMove += (_, pos) => RaisePointer(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0);
+            mouse.MouseDown += (m, btn) => RaisePointer(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0);
+            mouse.MouseUp += (m, btn) => RaisePointer(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0);
+            mouse.Scroll += (m, wheel) => RaisePointer(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y);
         }
         foreach (var keyboard in _input.Keyboards)
         {
-            keyboard.KeyDown += (_, k, code) =>
-                KeyInput?.Invoke(new KeyEvent(true, MapKey(k), (int)k));
-            keyboard.KeyUp += (_, k, code) =>
-                KeyInput?.Invoke(new KeyEvent(false, MapKey(k), (int)k));
-            keyboard.KeyChar += (_, ch) =>
-                TextInput?.Invoke(new TextEvent(ch));
+            keyboard.KeyDown += (_, k, _) => RaiseKey(true, k);
+            keyboard.KeyUp += (_, k, _) => RaiseKey(false, k);
+            keyboard.KeyChar += (_, ch) => RaiseText(ch);
         }
     }
+
+    internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
+        PointerInput?.Invoke(new PointerEvent(kind, x, y, button, wheelDx, wheelDy));
+
+    internal void RaiseKey(bool isDown, Silk.NET.Input.Key key) =>
+        KeyInput?.Invoke(new KeyEvent(isDown, MapKey(key), (int)key));
+
+    internal void RaiseText(char character) =>
+        TextInput?.Invoke(new TextEvent(character));
 
     /// <summary>
     /// The native window as a surface source. Hand this to your renderer
@@ -137,8 +168,38 @@ public sealed class AppWindow : IDisposable
     /// <summary>Run the event loop. Blocks until the window closes.</summary>
     public int Run()
     {
+        if (Host is not null)
+            throw new InvalidOperationException("this window belongs to an AppHost. Call AppHost.Run instead.");
         _window.Run();
         return 0;
+    }
+
+    /// <summary>
+    /// Ask the host's render thread to draw a frame soon. Callable from any
+    /// thread. For windows driven by <see cref="Run"/>, use <see cref="IsDirty"/>.
+    /// </summary>
+    public void RequestRedraw() => _redraw.Set();
+
+    /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
+    public void Resize(int width, int height) => _window.Size = new Vector2D<int>(width, height);
+
+    /// <summary>Minimize the window. Main thread only.</summary>
+    public void Minimize()
+    {
+        // Record the state now: macOS reports the change only after the
+        // minimize animation, and a hosted render thread must stop touching
+        // the swapchain before that.
+        _minimized = true;
+        _window.WindowState = WindowState.Minimized;
+        RequestRedraw();
+    }
+
+    /// <summary>Restore the window from minimized. Main thread only.</summary>
+    public void Restore()
+    {
+        _minimized = false;
+        _window.WindowState = WindowState.Normal;
+        RequestRedraw();
     }
 
     /// <summary>
@@ -152,12 +213,39 @@ public sealed class AppWindow : IDisposable
     {
         _input.Dispose();
         _window.Dispose();
+        _redraw.Dispose();
     }
 
-    private FrameInfo Frame(double delta) =>
-        new(_lastFb.X, _lastFb.Y, _dpr, delta);
+    private FrameInfo Frame(double delta)
+    {
+        var g = _geom;
+        return new FrameInfo(g.PixelWidth, g.PixelHeight, g.Dpr, delta);
+    }
 
-    private static Input.Key MapKey(Silk.NET.Input.Key k)
+    // The host-facing seam. The render thread calls these; everything else
+    // on this class stays main-thread.
+    internal bool IsClosing => _window.IsClosing;
+    internal bool IsMinimized => _minimized;
+    internal bool ShouldRenderNow => IsDirty?.Invoke() != false;
+    internal void RaiseRenderFrame(double delta) => RenderFrame?.Invoke(Frame(delta));
+    internal bool WaitForRedraw(int milliseconds) => _redraw.WaitOne(milliseconds);
+
+    internal bool TryConsumePendingResize(out FrameInfo frame)
+    {
+        var g = Interlocked.Exchange(ref _pendingResize, null);
+        if (g is null)
+        {
+            frame = default;
+            return false;
+        }
+        _geom = g;
+        frame = new FrameInfo(g.PixelWidth, g.PixelHeight, g.Dpr, 0);
+        return true;
+    }
+
+    internal void RaiseResized(FrameInfo frame) => Resized?.Invoke(frame);
+
+    internal static Input.Key MapKey(Silk.NET.Input.Key k)
     {
         // Silk.NET.Input.Key values are GLFW keycodes, which Skyline's enum
         // mirrors. Anything outside the defined set reports Unknown but keeps

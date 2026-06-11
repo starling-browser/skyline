@@ -4,9 +4,15 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWindow/HelloWindow.csproj" />
+    <Project Path="samples/TwoWindows/TwoWindows.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Skyline/Skyline.csproj" />
     <Project Path="src/Skyline.Gpu/Skyline.Gpu.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Skyline.Tests/Skyline.Tests.csproj" />
+    <Project Path="tests/Skyline.Gpu.Tests/Skyline.Gpu.Tests.csproj" />
+    <Project Path="tests/Skyline.WindowedTests/Skyline.WindowedTests.csproj" />
   </Folder>
 </Solution>
