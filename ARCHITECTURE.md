@@ -119,8 +119,44 @@ swapchain that survive resizes.
 - `Immediate` — no vsync. Lowest latency, tearing likely.
 
 Every mode except Fifo depends on the platform and driver, and an
-unsupported mode fails at `Configure`. Skyline.Gpu does not yet report
-which modes a surface supports — a planned addition. Buffer count
-(double versus triple) is not in WebGPU's API at all. wgpu picks it per
-platform, so Skyline does not expose it. Frame pacing (how many frames
-may be in flight) is future work.
+unsupported mode fails at `Configure`. `WindowSurface.Capabilities`
+reports what the surface supports — formats, present modes, alpha
+modes — with one native query on first access, cached after.
+`ChoosePresentMode` picks the first supported mode from your preference
+list, falling back to Fifo:
+
+```csharp
+var surface = gpu.Surface!;
+surface.PresentMode = surface.Capabilities.ChoosePresentMode(PresentMode.Mailbox);
+surface.Configure(w, h);
+```
+
+Buffer count (double versus triple) is not in WebGPU's API at all. wgpu
+picks it per platform, so Skyline does not expose it.
+
+## Frame pacing
+
+A fast CPU records frames quicker than the GPU draws them. Unchecked,
+frames pile up in the queue and every input waits behind the pile —
+throughput looks fine while latency grows. `FramePacer` caps how many
+frames may be submitted but not yet finished:
+
+```csharp
+var pacer = new FramePacer(gpu, maxFramesInFlight: 2);
+
+// each frame:
+pacer.Wait();                  // block until a slot frees
+// acquire, encode, QueueSubmit
+pacer.FrameSubmitted();        // count the submit, register completion
+```
+
+The default of 2 lets the CPU record one frame while the GPU draws
+another. `TryWait` is the non-blocking variant for loops that would
+rather skip than stall.
+
+The pacer is built for per-frame use. The completion callback is created
+once and reused — never allocated per frame. Steady-state cost per frame
+is one native call and two interlocked operations. The callback frees
+its slot on every completion status, including device loss, so `Wait`
+cannot hang on a dead device. Like `TextureReadback`, it needs the
+wgpu-native poll extension.

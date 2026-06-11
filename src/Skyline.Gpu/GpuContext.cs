@@ -173,6 +173,9 @@ public sealed unsafe class GpuContext : IDisposable
         if (_device != null) _wgpu.DeviceRelease(_device);
         if (_adapter != null) _wgpu.AdapterRelease(_adapter);
         if (_instance != null) _wgpu.InstanceRelease(_instance);
+        // After the device is gone, wgpu holds no callback pointers.
+        _errorCallback.Dispose();
+        _lostCallback.Dispose();
     }
 
     internal void AttachSurface(WindowSurface surface) => _surface = surface;
