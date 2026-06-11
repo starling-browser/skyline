@@ -35,6 +35,9 @@ return win.Run();
   on it. The sample's smoke test checks its own overlay this way.
 - **Idle apps that idle.** Nothing changed, nothing renders. The loop
   sleeps instead of burning a core.
+- **Latency that stays flat.** `FramePacer` caps frames in flight, so
+  the CPU can't queue work the GPU hasn't earned. One native call per
+  frame, zero allocation.
 - **Nothing locked away.** Every raw wgpu handle is one property away.
   If WebGPU can do it, you still can.
 
@@ -75,7 +78,7 @@ present modes and buffering work: [ARCHITECTURE.md](ARCHITECTURE.md).
 Early. The window host, the WebGPU layer, and the sample are real and
 tested on macOS. Windows and Linux paths exist through GLFW and wgpu but
 are not yet exercised. Planned next: key modifier state, pointer
-enter/leave, a multi-window host, and present-mode capability reporting.
+enter/leave, and a multi-window host.
 
 ## License
 

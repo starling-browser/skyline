@@ -14,6 +14,7 @@ public sealed unsafe class WindowSurface : IDisposable
     private readonly GpuContext _context;
     private readonly Surface* _surface;
     private readonly WindowSurfaceOptions _options;
+    private WindowSurfaceCapabilities? _capabilities;
     private Texture* _texture;
     private TextureView* _view;
     private bool _disposed;
@@ -23,12 +24,46 @@ public sealed unsafe class WindowSurface : IDisposable
         _context = context;
         _surface = surface;
         _options = options;
+        PresentMode = options.PresentMode;
     }
 
     /// <summary>Size set by the last <see cref="Configure"/>, in pixels.</summary>
     public (int Width, int Height) PixelSize { get; private set; }
 
     public TextureFormat Format => _options.Format;
+
+    /// <summary>
+    /// The present mode the next <see cref="Configure"/> applies. Seeded
+    /// from the options. Set it before the first Configure to pick a mode
+    /// from <see cref="Capabilities"/> — for example
+    /// <c>surface.PresentMode = surface.Capabilities.ChoosePresentMode(PresentMode.Mailbox)</c>.
+    /// </summary>
+    public PresentMode PresentMode { get; set; }
+
+    /// <summary>
+    /// What this surface supports on this adapter. One native query on
+    /// first access, cached after.
+    /// </summary>
+    public WindowSurfaceCapabilities Capabilities => _capabilities ??= FetchCapabilities();
+
+    private WindowSurfaceCapabilities FetchCapabilities()
+    {
+        SurfaceCapabilities caps = default;
+        _context.Api.SurfaceGetCapabilities(_surface, _context.AdapterHandle, ref caps);
+        try
+        {
+            var formats = new ReadOnlySpan<TextureFormat>(caps.Formats, (int)caps.FormatCount).ToArray();
+            var modes = new ReadOnlySpan<PresentMode>(caps.PresentModes, (int)caps.PresentModeCount).ToArray();
+            var alphas = new ReadOnlySpan<CompositeAlphaMode>(caps.AlphaModes, (int)caps.AlphaModeCount).ToArray();
+            return new WindowSurfaceCapabilities(formats, modes, alphas);
+        }
+        finally
+        {
+            // The native arrays are wgpu allocations and must be freed even
+            // if a managed copy throws.
+            _context.Api.SurfaceCapabilitiesFreeMembers(caps);
+        }
+    }
 
     /// <summary>
     /// (Re)build the swapchain at this pixel size. Call once after creation
@@ -46,7 +81,7 @@ public sealed unsafe class WindowSurface : IDisposable
             Usage = TextureUsage.RenderAttachment | _options.ExtraUsage,
             Width = (uint)w,
             Height = (uint)h,
-            PresentMode = _options.PresentMode,
+            PresentMode = PresentMode,
             AlphaMode = _options.AlphaMode,
         };
         _context.Api.SurfaceConfigure(_surface, in config);

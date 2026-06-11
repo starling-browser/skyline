@@ -1,4 +1,7 @@
 <Solution>
+  <Folder Name="/bench/">
+    <Project Path="bench/Skyline.Gpu.Benchmarks/Skyline.Gpu.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWindow/HelloWindow.csproj" />
   </Folder>

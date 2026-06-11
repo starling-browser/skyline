@@ -30,6 +30,10 @@ Two projects:
   apps reference `Silk.NET.WebGPU.Native.WGPU` (or another
   implementation) themselves.
 
+There is also `bench/Skyline.Gpu.Benchmarks` — BenchmarkDotNet checks on
+the performance claims below. Run it with
+`dotnet run -c Release --project bench/Skyline.Gpu.Benchmarks`.
+
 Skyline targets WebGPU. The window host's native handle works with any
 API that can build a swapchain, and a Vulkan, Metal, or OpenGL presenter
 can plug in without Skyline.Gpu — supported as an escape hatch, not a
@@ -119,8 +123,63 @@ swapchain that survive resizes.
 - `Immediate` — no vsync. Lowest latency, tearing likely.
 
 Every mode except Fifo depends on the platform and driver, and an
-unsupported mode fails at `Configure`. Skyline.Gpu does not yet report
-which modes a surface supports — a planned addition. Buffer count
-(double versus triple) is not in WebGPU's API at all. wgpu picks it per
-platform, so Skyline does not expose it. Frame pacing (how many frames
-may be in flight) is future work.
+unsupported mode fails at `Configure`. `WindowSurface.Capabilities`
+reports what the surface supports — formats, present modes, alpha
+modes — with one native query on first access, cached after.
+`ChoosePresentMode` picks the first supported mode from your preference
+list, falling back to Fifo:
+
+```csharp
+var surface = gpu.Surface!;
+surface.PresentMode = surface.Capabilities.ChoosePresentMode(PresentMode.Mailbox);
+surface.Configure(w, h);
+```
+
+Buffer count (double versus triple) is not in WebGPU's API at all. wgpu
+picks it per platform, so Skyline does not expose it.
+
+## Frame pacing
+
+A fast CPU records frames quicker than the GPU draws them. Unchecked,
+frames pile up in the queue and every input waits behind the pile —
+throughput looks fine while latency grows. `FramePacer` caps how many
+frames may be submitted but not yet finished:
+
+```csharp
+var pacer = new FramePacer(gpu, maxFramesInFlight: 2);
+
+// each frame:
+pacer.Wait();                  // block until a slot frees
+// acquire, encode, QueueSubmit
+pacer.FrameSubmitted();        // count the submit, register completion
+```
+
+The default of 2 lets the CPU record one frame while the GPU draws
+another. `TryWait` is the non-blocking variant for loops that would
+rather skip than stall.
+
+The pacer is built for per-frame use. The completion callback is created
+once and reused — never allocated per frame. Steady-state cost per frame
+is one native call and two interlocked operations. The callback frees
+its slot on every completion status, including device loss, so `Wait`
+cannot hang on a dead device. Like `TextureReadback`, it needs the
+wgpu-native poll extension, and the constructor fails fast without it.
+
+Measured (BenchmarkDotNet, M-series Mac, empty submits to a headless
+device): the bookkeeping adds about 60 nanoseconds to a 3.5 microsecond
+submit, with zero managed allocation. With the cap engaged the loop sits
+in `Wait` for the GPU's actual completion time — that is the
+backpressure working, not overhead.
+
+## Sustainable frame rate
+
+The frame-rate benchmarks run a real paced frame loop at 2560x1440 and
+answer "what FPS can this stack sustain":
+
+- **Offscreen** (render and submit, no present): 0.7–0.9 ms per frame,
+  about 1,200–1,400 FPS — the stack sustains a 240 Hz panel with five
+  times headroom, allocation-free.
+- **Windowed**: 8.3 ms per frame, exactly the test panel's 120 Hz. Even
+  in Immediate mode, macOS hands out drawables at the display's refresh
+  rate. The wall is the display pipeline, not Skyline — the same loop
+  with the display out of the way runs ten times faster.

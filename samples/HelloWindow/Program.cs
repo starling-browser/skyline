@@ -119,8 +119,18 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         });
         _gpu.UncapturedError += (type, msg) => Console.Error.WriteLine($"wgpu error ({type}): {msg}");
         _surface = _gpu.Surface!;
+
+        // Fifo is the steady choice for a vsync-throttled sample. The
+        // capability query is still exercised (and printed) so a consumer
+        // can see what this machine would allow.
+        Console.WriteLine($"present modes here: {string.Join(", ", _surface.Capabilities.PresentModes.ToArray())}");
+
+        // At most one frame recording while one is on the GPU.
+        _pacer = new FramePacer(_gpu, maxFramesInFlight: 2);
         Configure(frame.PixelWidth, frame.PixelHeight);
     }
+
+    private readonly FramePacer _pacer;
 
     public void Configure(int pixelWidth, int pixelHeight) =>
         _surface.Configure(pixelWidth, pixelHeight);
@@ -141,6 +151,8 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
 
     public bool RenderClear(float r, float g, float b, string[] hudLines, float dpr, bool readbackHud = false)
     {
+        _pacer.Wait(); // keep the CPU at most one frame ahead of the GPU
+
         if (!_surface.TryAcquireFrame())
             return false; // swapchain stale; Skyline.Gpu reconfigured, retry next frame
 
@@ -171,6 +183,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
 
         var cmd = wgpu.CommandEncoderFinish(enc, (CommandBufferDescriptor*)null);
         wgpu.QueueSubmit(_gpu.QueueHandle, 1, &cmd);
+        _pacer.FrameSubmitted();
         wgpu.CommandBufferRelease(cmd);
         wgpu.CommandEncoderRelease(enc);
 
@@ -265,6 +278,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
 
     public void Dispose()
     {
+        _pacer.Dispose(); // drains in-flight frames before teardown
         if (_hudTexture != null) _gpu.Api.TextureRelease(_hudTexture);
         _gpu.Dispose(); // disposes the surface too
     }

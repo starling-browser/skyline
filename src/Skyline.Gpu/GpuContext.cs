@@ -144,6 +144,9 @@ public sealed unsafe class GpuContext : IDisposable
     /// <summary>The device is gone (driver reset, destroyed). Resources on it are invalid.</summary>
     public event Action<DeviceLostReason, string?>? DeviceLost;
 
+    /// <summary>True when the wgpu-native poll extension is available. <see cref="TextureReadback"/> and <see cref="FramePacer"/> require it.</summary>
+    public bool SupportsPoll => _wgpuNative is not null;
+
     /// <summary>
     /// Drive wgpu-native's device queue. <paramref name="wait"/> blocks until
     /// submitted work completes — what a buffer map waits on. Returns false
@@ -173,6 +176,9 @@ public sealed unsafe class GpuContext : IDisposable
         if (_device != null) _wgpu.DeviceRelease(_device);
         if (_adapter != null) _wgpu.AdapterRelease(_adapter);
         if (_instance != null) _wgpu.InstanceRelease(_instance);
+        // After the device is gone, wgpu holds no callback pointers.
+        _errorCallback.Dispose();
+        _lostCallback.Dispose();
     }
 
     internal void AttachSurface(WindowSurface surface) => _surface = surface;
