@@ -12,7 +12,7 @@ namespace Skyline;
 /// rendering opinion. The window's native handle is exposed through
 /// <see cref="Surface"/> (Silk.NET's <see cref="INativeWindowSource"/>),
 /// so any presenter that can build a surface from a native window
-/// (wgpu, Vulkan, Metal, GL) plugs in; Skyline never touches pixels.
+/// (wgpu, Vulkan, Metal, GL) plugs in. This class never touches a pixel.
 /// </summary>
 public sealed class AppWindow : IDisposable
 {
@@ -63,7 +63,7 @@ public sealed class AppWindow : IDisposable
             if (fb.X <= 0 || fb.Y <= 0) return;
             if (IsDirty is { } dirty && !dirty())
             {
-                // Manual present is the only throttle in this stack; an idle
+                // Manual present is the only throttle in this stack. An idle
                 // frame that neither draws nor presents must sleep or the
                 // loop free-runs a core.
                 Thread.Sleep(8);
@@ -104,7 +104,7 @@ public sealed class AppWindow : IDisposable
     /// <summary>Draw and present a frame. Skyline never presents for you.</summary>
     public event Action<FrameInfo>? RenderFrame;
 
-    /// <summary>Framebuffer size changed; reconfigure your swapchain.</summary>
+    /// <summary>Framebuffer size changed. Reconfigure your swapchain.</summary>
     public event Action<FrameInfo>? Resized;
 
     public event Action<PointerEvent>? PointerInput;
@@ -153,7 +153,7 @@ public sealed class AppWindow : IDisposable
     private static Input.Key MapKey(Silk.NET.Input.Key k)
     {
         // Silk.NET.Input.Key values are GLFW keycodes, which Skyline's enum
-        // mirrors; anything outside the defined set reports Unknown but keeps
+        // mirrors. Anything outside the defined set reports Unknown but keeps
         // the raw code on the event.
         var code = (int)k;
         return Enum.IsDefined(typeof(Input.Key), code) ? (Input.Key)code : Input.Key.Unknown;

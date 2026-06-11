@@ -1,57 +1,52 @@
 # Skyline
 
-A native window with OS chrome, an event loop, and input — and no rendering
-opinion. Skyline hands you the window's native surface handle and gets out
-of the way. Bring your own presenter: WebGPU, Vulkan, Metal, OpenGL,
-anything that can build a swapchain from a native window.
+Ten lines from an empty `Main` to a live GPU frame.
+
+Skyline is a WebGPU-first window and GPU library for .NET. It puts a
+window on screen, hands you a working device and swapchain, and gets out
+of the way. The rendering stays yours, in raw wgpu.
 
 ```csharp
 using var win = new AppWindow(new() { Title = "hello" });
-var renderer = MyRenderer.CreateSurface(win.Surface);   // your code, your API
+using var gpu = GpuContext.Create(win.Surface);
 
-win.Resized     += f => renderer.Configure(f.PixelWidth, f.PixelHeight);
-win.RenderFrame += f => renderer.DrawAndPresent();
+win.Resized     += f => gpu.Surface!.Configure(f.PixelWidth, f.PixelHeight);
+win.RenderFrame += f =>
+{
+    if (!gpu.Surface!.TryAcquireFrame()) return;   // stale swapchain, retry next frame
+    // encode passes against gpu.Surface.CurrentView with raw wgpu (gpu.Api)
+    gpu.Surface.Present();
+};
 return win.Run();
 ```
 
-## What Skyline owns
+## What you get
 
-- Window creation with OS chrome (GLFW via Silk.NET) and DPI tracking.
-- The event loop, with dirty-frame pacing (`IsDirty`). Idle apps sleep
-  instead of free-running a core.
-- Input as plain structs: pointer, key, and text events. No Silk.NET
-  types leak into your code.
-- Clipboard text.
+- **A window in one line.** OS chrome, event loop, DPI tracking, and
+  clipboard. Input arrives as plain C# structs — pointer, key, text.
+- **A GPU without the boilerplate.** The few hundred lines of unsafe
+  setup every wgpu app starts with — instance, adapter, device, error
+  callbacks that crash if you forget to root them — already written and
+  tested.
+- **Resizes that just work.** A resize or display change kills the
+  swapchain mid-flight. Skyline catches it, rebuilds, and your next
+  frame lands.
+- **Tests that see pixels.** Read the presented frame back and assert
+  on it. The sample's smoke test checks its own overlay this way.
+- **Idle apps that idle.** Nothing changed, nothing renders. The loop
+  sleeps instead of burning a core.
+- **Nothing locked away.** Every raw wgpu handle is one property away.
+  If WebGPU can do it, you still can.
 
-What Skyline never does: touch a pixel. The render callback gives you
-frame geometry and timing. Presenting is yours, through
-`AppWindow.Surface` (Silk.NET's `INativeWindowSource`).
-
-## Requirements
-
-- .NET 10 SDK or later.
-- A GPU. The sample uses wgpu (the native WebGPU implementation) and
-  ships its binary via the `Silk.NET.WebGPU.Native.WGPU` package.
-
-## Layout
-
-- `src/Skyline` — the library. Depends only on Silk.NET windowing,
-  input, and GLFW. No graphics API dependency.
-- `samples/HelloWindow` — the proof that the seam works.
-
-## Sample: HelloWindow
-
-A Skyline window plus a raw wgpu clear-color renderer, written entirely
-in the sample. An on-screen panel shows the controls and the live color
-values.
-
-- Move the pointer to steer the color.
-- Space toggles a slow hue cycle.
-- Escape quits.
+## See it run
 
 ```sh
 dotnet run --project samples/HelloWindow
 ```
+
+A window, a clear color steered by your pointer, and a text overlay —
+rendered through the full stack. Space toggles a hue cycle. Escape
+quits.
 
 Headless checks:
 
@@ -61,12 +56,26 @@ Headless checks:
 - `--verify-hud` reads the final frame back from the GPU and asserts the
   panel's pixels are in the presented image.
 
+## Requirements
+
+- .NET 10 SDK or later.
+- A GPU. The sample uses wgpu (the native WebGPU implementation) and
+  ships its binary via the `Silk.NET.WebGPU.Native.WGPU` package.
+
+## Design
+
+The rule behind the library: **mirror WebGPU, don't abstract it.**
+Skyline wraps setup and present — the parts every app rewrites — and no
+encoder, pipeline, or draw call. What each project owns, why this beats
+a renderer abstraction, what Skyline adds over raw Silk.NET, and how
+present modes and buffering work: [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Status
 
-Early. The window host and the sample are real and tested on macOS.
-Windows and Linux paths exist through GLFW but are not yet exercised.
-Planned next: an optional wgpu adapter package that wraps the sample's
-device and swapchain boilerplate.
+Early. The window host, the WebGPU layer, and the sample are real and
+tested on macOS. Windows and Linux paths exist through GLFW and wgpu but
+are not yet exercised. Planned next: key modifier state, pointer
+enter/leave, a multi-window host, and present-mode capability reporting.
 
 ## License
 

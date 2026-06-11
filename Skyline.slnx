@@ -4,5 +4,6 @@
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Skyline/Skyline.csproj" />
+    <Project Path="src/Skyline.Gpu/Skyline.Gpu.csproj" />
   </Folder>
 </Solution>

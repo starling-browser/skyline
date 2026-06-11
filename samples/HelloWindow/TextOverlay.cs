@@ -4,7 +4,7 @@ namespace HelloWindow;
 /// CPU-rasterized text panel using a built-in 5x7 pixel font (uppercase,
 /// digits, and a little punctuation). Produces BGRA8 pixels that the
 /// renderer copies into the swapchain texture — no shader pipeline needed
-/// for a sample-sized HUD.
+/// for a sample-sized overlay.
 /// </summary>
 internal static class TextOverlay
 {

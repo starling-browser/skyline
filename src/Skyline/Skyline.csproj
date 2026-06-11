@@ -3,7 +3,7 @@
     <RootNamespace>Skyline</RootNamespace>
     <!-- Clipboard goes through the GLFW window handle, which is pointer-shaped. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <Description>A native window with OS chrome, an event loop, input, and a surface handle. No rendering opinion — bring your own presenter.</Description>
+    <Description>A native window with OS chrome, an event loop, input, and a surface handle. Pairs with Skyline.Gpu for WebGPU, or bring your own presenter.</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.Windowing.Common" />
