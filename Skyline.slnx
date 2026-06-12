@@ -4,6 +4,8 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWindow/HelloWindow.csproj" />
+    <Project Path="samples/TexturedQuad/TexturedQuad.csproj" />
+    <Project Path="samples/InteractiveCanvas/InteractiveCanvas.csproj" />
     <Project Path="samples/TwoWindows/TwoWindows.csproj" />
   </Folder>
   <Folder Name="/src/">

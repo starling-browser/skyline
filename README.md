@@ -68,6 +68,19 @@ Two windows on one device, each with its own render thread:
 dotnet run --project samples/TwoWindows
 ```
 
+A textured quad with an app-owned shader pipeline, vertex buffer,
+texture, sampler, and bind group:
+
+```sh
+dotnet run --project samples/TexturedQuad
+```
+
+An interactive canvas that turns pointer input into dynamic GPU geometry:
+
+```sh
+dotnet run --project samples/InteractiveCanvas
+```
+
 ## Tests
 
 Both libraries are at 100% line coverage, from three vehicles:

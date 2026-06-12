@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>TexturedQuad</RootNamespace>
+    <!-- Pipelines, bind groups, and buffers are encoded with raw wgpu. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Gpu\Skyline.Gpu.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
+  </ItemGroup>
+</Project>
