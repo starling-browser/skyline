@@ -48,6 +48,9 @@ internal interface IWindowBackend : IDisposable
     void Resize(int width, int height);
     void Minimize();
     void Restore();
+
+    /// <summary>Set the window/app icon from RGBA8 pixels.</summary>
+    void SetIcon(WindowIcon icon);
 }
 
 /// <summary>

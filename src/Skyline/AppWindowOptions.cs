@@ -20,6 +20,9 @@ public sealed class AppWindowOptions
     /// <summary>The kind of OS chrome the window wears. Defaults to <see cref="ChromeMode.Standard"/>.</summary>
     public ChromeMode Chrome { get; init; } = ChromeMode.Standard;
 
+    /// <summary>The window/app icon, applied at creation. Null leaves the platform default.</summary>
+    public WindowIcon? Icon { get; init; }
+
     /// <summary>
     /// Use the portable GLFW backend even on platforms with a native one
     /// (macOS). An escape hatch for falling back when a native backend
