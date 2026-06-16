@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+using Silk.NET.Core;
 using Silk.NET.GLFW;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -67,6 +68,11 @@ internal sealed class GlfwWindowBackend : IWindowBackend
             keyboard.KeyUp += (_, k, _) => Key?.Invoke(new KeyEvent(false, AppWindow.MapKey(k), (int)k));
             keyboard.KeyChar += (_, ch) => Text?.Invoke(new TextEvent(ch));
         }
+
+        if (options.Icon is { } icon)
+        {
+            SetIcon(icon);
+        }
     }
 
     public (int Width, int Height) FramebufferSize => (_window.FramebufferSize.X, _window.FramebufferSize.Y);
@@ -99,6 +105,9 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     public void Minimize() => _window.WindowState = WindowState.Minimized;
 
     public void Restore() => _window.WindowState = WindowState.Normal;
+
+    public void SetIcon(WindowIcon icon) =>
+        _window.SetWindowIcon(new[] { new RawImage(icon.Width, icon.Height, icon.Rgba) });
 
     public void Dispose()
     {

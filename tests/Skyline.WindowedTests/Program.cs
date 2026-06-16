@@ -67,6 +67,30 @@ win.PumpEvents();
 Check(soloResized, "Resize fires Resized in single-window mode");
 frame = win.CurrentFrame;
 
+// --- Window icon on the GLFW backend -----------------------------------
+
+var iconPixels = new byte[2 * 2 * 4];
+Array.Fill(iconPixels, (byte)0xC0);
+var iconOk = true;
+try
+{
+    // Applied at creation, then changed at runtime.
+    using var iconWin = new AppWindow(new AppWindowOptions
+    {
+        Title = "icon",
+        Width = 160,
+        Height = 120,
+        ForceGlfw = true,
+        Icon = new WindowIcon(2, 2, iconPixels),
+    });
+    iconWin.SetIcon(new WindowIcon(2, 2, iconPixels));
+}
+catch
+{
+    iconOk = false;
+}
+Check(iconOk, "SetIcon applies at creation and at runtime on the GLFW backend");
+
 // --- Input raising (the seam below GLFW callbacks) ---------------------
 
 PointerEvent? pointer = null;

@@ -186,6 +186,13 @@ public sealed class AppWindow : IDisposable
     /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
     public void Resize(int width, int height) => _backend.Resize(width, height);
 
+    /// <summary>
+    /// Set the window/app icon from RGBA8 pixels. Shown in the taskbar, dock,
+    /// and window switcher. Can also be set at creation via
+    /// <see cref="AppWindowOptions.Icon"/>.
+    /// </summary>
+    public void SetIcon(WindowIcon icon) => _backend.SetIcon(icon);
+
     /// <summary>Minimize the window. Main thread only.</summary>
     public void Minimize()
     {

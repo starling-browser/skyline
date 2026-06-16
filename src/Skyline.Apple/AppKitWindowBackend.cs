@@ -81,6 +81,11 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         _delegate = new WindowDelegate(this);
         _window.Delegate = _delegate;
         _window.MakeKeyAndOrderFront(null);
+
+        if (options.Icon is { } icon)
+        {
+            SetIcon(icon);
+        }
     }
 
     private float Scale => (float)_window.BackingScaleFactor;
@@ -153,6 +158,20 @@ internal sealed class AppKitWindowBackend : IWindowBackend
     public void RequestClose() => _window.Close();
 
     public void Resize(int width, int height) => _window.SetContentSize(new CGSize(width, height));
+
+    public void SetIcon(WindowIcon icon)
+    {
+        // macOS sets the dock/app icon, not a per-window one. Build an NSImage
+        // from the RGBA8 pixels through a CGImage.
+        using var colorSpace = CGColorSpace.CreateDeviceRGB();
+        using var data = NSData.FromArray(icon.Rgba);
+        using var provider = new CGDataProvider(data);
+        using var cgImage = new CGImage(
+            icon.Width, icon.Height, 8, 32, icon.Width * 4, colorSpace,
+            CGBitmapFlags.ByteOrderDefault | CGBitmapFlags.Last,
+            provider, null, false, CGColorRenderingIntent.Default);
+        NSApplication.SharedApplication.ApplicationIconImage = new NSImage(cgImage, new CGSize(icon.Width, icon.Height));
+    }
 
     public void Minimize() => _window.Miniaturize(null);
 
