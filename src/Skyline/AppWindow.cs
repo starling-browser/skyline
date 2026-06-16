@@ -97,6 +97,7 @@ public sealed class AppWindow : IDisposable
         _backend.Pointer += e => PointerInput?.Invoke(e);
         _backend.Key += e => KeyInput?.Invoke(e);
         _backend.Text += e => TextInput?.Invoke(e);
+        _backend.Moved += p => Moved?.Invoke(p);
     }
 
     internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
@@ -138,6 +139,9 @@ public sealed class AppWindow : IDisposable
     public event Action<PointerEvent>? PointerInput;
     public event Action<KeyEvent>? KeyInput;
     public event Action<TextEvent>? TextInput;
+
+    /// <summary>The window moved. Carries the new top-left in screen points.</summary>
+    public event Action<(int X, int Y)>? Moved;
 
     /// <summary>
     /// When set and returning false, the frame is skipped and the loop
@@ -185,6 +189,28 @@ public sealed class AppWindow : IDisposable
 
     /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
     public void Resize(int width, int height) => _backend.Resize(width, height);
+
+    /// <summary>
+    /// The window's top-left on screen, in logical points. Set to move the
+    /// window; <see cref="Moved"/> follows. Save it on close and restore it on
+    /// the next launch to keep the window where the user left it.
+    /// </summary>
+    public (int X, int Y) Position
+    {
+        get => _backend.Position;
+        set => _backend.Position = value;
+    }
+
+    /// <summary>The window's screen rect in logical points: <see cref="Position"/> plus its logical size.</summary>
+    public (int X, int Y, int Width, int Height) Bounds
+    {
+        get
+        {
+            var (x, y) = _backend.Position;
+            var (w, h) = _backend.LogicalSize;
+            return (x, y, w, h);
+        }
+    }
 
     /// <summary>Minimize the window. Main thread only.</summary>
     public void Minimize()

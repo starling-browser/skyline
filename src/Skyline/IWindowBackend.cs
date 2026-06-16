@@ -20,6 +20,9 @@ internal interface IWindowBackend : IDisposable
     string Title { get; set; }
     string? ClipboardText { get; set; }
 
+    /// <summary>Top-left of the window in screen coordinates, in logical points.</summary>
+    (int X, int Y) Position { get; set; }
+
     bool IsClosing { get; }
 
     /// <summary>How a presenter builds a surface for this window.</summary>
@@ -30,6 +33,9 @@ internal interface IWindowBackend : IDisposable
 
     /// <summary>Minimized state changed; true when minimized.</summary>
     event Action<bool>? MinimizedChanged;
+
+    /// <summary>The window moved; carries the new top-left in screen points.</summary>
+    event Action<(int X, int Y)>? Moved;
 
     /// <summary>A frame tick from the backend's own loop, with the delta seconds.</summary>
     event Action<double>? Render;

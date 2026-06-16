@@ -16,11 +16,13 @@ public class WindowBackendFactoryTests
         public (int Width, int Height) LogicalSize => (100, 50);
         public string Title { get; set; } = "fake";
         public string? ClipboardText { get; set; }
+        public (int X, int Y) Position { get; set; }
         public bool IsClosing => false;
         public WindowSurfaceSource SurfaceSource { get; } = new WindowSurfaceSource.MetalLayer(0x1234);
 
         public event Action<(int Width, int Height)>? FramebufferResized;
         public event Action<bool>? MinimizedChanged;
+        public event Action<(int X, int Y)>? Moved;
         public event Action<double>? Render;
         public event Action<PointerEvent>? Pointer;
         public event Action<KeyEvent>? Key;
