@@ -7,14 +7,23 @@
     <Project Path="samples/TexturedQuad/TexturedQuad.csproj" />
     <Project Path="samples/InteractiveCanvas/InteractiveCanvas.csproj" />
     <Project Path="samples/TwoWindows/TwoWindows.csproj" />
+    <Project Path="samples/ThrowingFrame/ThrowingFrame.csproj" />
+    <Project Path="samples/UnionApp/UnionApp.csproj" />
+    <Project Path="samples/Approvals/Approvals.csproj" />
+    <Project Path="samples/InteractionModel/InteractionModel.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Skyline/Skyline.csproj" />
     <Project Path="src/Skyline.Gpu/Skyline.Gpu.csproj" />
+    <Project Path="src/Skyline.Render/Skyline.Render.csproj" />
+    <Project Path="src/Skyline.Interaction/Skyline.Interaction.csproj" />
+    <Project Path="src/Skyline.Interaction.Ui/Skyline.Interaction.Ui.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Skyline.Tests/Skyline.Tests.csproj" />
     <Project Path="tests/Skyline.Gpu.Tests/Skyline.Gpu.Tests.csproj" />
+    <Project Path="tests/Skyline.Render.Tests/Skyline.Render.Tests.csproj" />
+    <Project Path="tests/Skyline.Interaction.Tests/Skyline.Interaction.Tests.csproj" />
     <Project Path="tests/Skyline.WindowedTests/Skyline.WindowedTests.csproj" />
   </Folder>
 </Solution>

@@ -17,9 +17,6 @@ namespace Skyline.Gpu.Benchmarks;
 /// with no present, so nothing display-side throttles it. This is the
 /// stack's own sustainable rate — the number that answers "could this
 /// keep up with a 240 Hz panel".
-///
-/// Program.cs converts both means to FPS against the standard tiers
-/// (60/120/144/240) after the run.
 /// </summary>
 [MemoryDiagnoser]
 public unsafe class FrameRateBenchmarks
@@ -73,8 +70,16 @@ public unsafe class FrameRateBenchmarks
     public void Cleanup()
     {
         _pacer.Dispose();
-        if (_offscreenView != null) _gpu.Api.TextureViewRelease(_offscreenView);
-        if (_offscreen != null) _gpu.Api.TextureRelease(_offscreen);
+        if (_offscreenView != null)
+        {
+            _gpu.Api.TextureViewRelease(_offscreenView);
+        }
+
+        if (_offscreen != null)
+        {
+            _gpu.Api.TextureRelease(_offscreen);
+        }
+
         _gpu.Dispose();
         _win.Dispose();
     }
@@ -88,7 +93,9 @@ public unsafe class FrameRateBenchmarks
         var acquired = false;
         for (var attempt = 0; attempt < 8 && !(acquired = _surface.TryAcquireFrame()); attempt++) { }
         if (!acquired)
+        {
             throw new InvalidOperationException("could not acquire a frame in 8 attempts");
+        }
 
         EncodeAndSubmit(_surface.CurrentView);
         _surface.Present();

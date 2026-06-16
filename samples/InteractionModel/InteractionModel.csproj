@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>InteractionModel</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The pure decision tier needs no window and no GPU. -->
+    <ProjectReference Include="..\..\src\Skyline.Interaction\Skyline.Interaction.csproj" />
+  </ItemGroup>
+</Project>

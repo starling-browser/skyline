@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Skyline.Interaction</RootNamespace>
+    <Description>The optional Skyline interaction tier: a pure, zero-dependency decision model — actors, capabilities, grants, consent, and the approvals policy — plus the in-process approval shell. No window or GPU type appears here, so it runs headless, on iOS, and in tests.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Skyline.Interaction.Tests" />
+  </ItemGroup>
+</Project>

@@ -7,6 +7,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
     <ProjectReference Include="..\..\src\Skyline.Gpu\Skyline.Gpu.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Render\Skyline.Render.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Interaction\Skyline.Interaction.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Interaction.Ui\Skyline.Interaction.Ui.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using Silk.NET.WebGPU;
 
 namespace Skyline.Gpu;
@@ -31,7 +33,26 @@ public sealed class WindowSurfaceCapabilities
     {
         // At most four entries — a scan beats any lookup structure.
         foreach (var m in _presentModes)
-            if (m == mode) return true;
+        {
+            if (m == mode)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public bool Supports(CompositeAlphaMode mode)
+    {
+        foreach (var m in _alphaModes)
+        {
+            if (m == mode)
+            {
+                return true;
+            }
+        }
+
         return false;
     }
 
@@ -42,7 +63,13 @@ public sealed class WindowSurfaceCapabilities
     public PresentMode ChoosePresentMode(params ReadOnlySpan<PresentMode> preferred)
     {
         foreach (var mode in preferred)
-            if (Supports(mode)) return mode;
+        {
+            if (Supports(mode))
+            {
+                return mode;
+            }
+        }
+
         return PresentMode.Fifo;
     }
 }

@@ -1,8 +1,6 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using Silk.NET.Core.Contexts;
-using Silk.NET.GLFW;
-using Silk.NET.Input;
-using Silk.NET.Maths;
-using Silk.NET.Windowing;
 using Skyline.Input;
 
 namespace Skyline;
@@ -13,54 +11,45 @@ namespace Skyline;
 /// <see cref="Surface"/> (Silk.NET's <see cref="INativeWindowSource"/>),
 /// so any presenter that can build a surface from a native window
 /// (wgpu, Vulkan, Metal, GL) plugs in. This class never touches a pixel.
+///
+/// The platform window lives behind an <see cref="IWindowBackend"/>: GLFW on
+/// Windows and Linux, a native backend on Apple. This class owns the frame
+/// geometry, dirty pacing, and resize parking on top of whichever backend the
+/// window's <see cref="AppWindowOptions"/> selected.
 /// </summary>
 public sealed class AppWindow : IDisposable
 {
-    private readonly IWindow _window;
-    private readonly IInputContext _input;
-    private readonly Glfw _glfw;
-    private readonly unsafe WindowHandle* _glfwHandle;
+    private readonly IWindowBackend _backend;
 
     // Frame geometry as one immutable object: the main thread writes it on
     // resize, a render thread reads it mid-frame. Swapping a reference is
     // atomic; updating two plain fields is not.
     private sealed record FrameGeom(int PixelWidth, int PixelHeight, float Dpr);
-    private volatile FrameGeom _geom = new(1, 1, 1f);
+    private volatile FrameGeom _geom;
     private volatile FrameGeom? _pendingResize;
     private volatile bool _minimized;
     private readonly AutoResetEvent _redraw = new(false);
     internal AppHost? Host;
 
-    public unsafe AppWindow(AppWindowOptions? options = null)
+    public AppWindow(AppWindowOptions? options = null)
     {
         options ??= new AppWindowOptions();
-        Silk.NET.Windowing.Glfw.GlfwWindowing.Use();
+        _backend = WindowBackendFactory.Create(options);
 
-        _window = Window.Create(WindowOptions.Default with
+        var fb = _backend.FramebufferSize;
+        var logical = _backend.LogicalSize;
+        var dpr = logical.Width > 0 ? (float)fb.Width / logical.Width : 1f;
+        _geom = new FrameGeom(fb.Width, fb.Height, dpr);
+
+        _backend.FramebufferResized += sz =>
         {
-            Title = options.Title,
-            Size = new Vector2D<int>(options.Width, options.Height),
-            WindowBorder = options.Resizable ? WindowBorder.Resizable : WindowBorder.Fixed,
-            // No GL context, no automatic swap: the consumer's presenter owns
-            // the surface and presents explicitly. This is what keeps Skyline
-            // unopinionated about rendering.
-            API = GraphicsAPI.None,
-            VSync = false,
-            ShouldSwapAutomatically = false,
-        });
-        _window.Initialize();
+            if (sz.Width <= 0 || sz.Height <= 0)
+            {
+                return;
+            }
 
-        var dpr = _window.Size.X > 0 ? (float)_window.FramebufferSize.X / _window.Size.X : 1f;
-        _geom = new FrameGeom(_window.FramebufferSize.X, _window.FramebufferSize.Y, dpr);
-
-        _glfw = Glfw.GetApi();
-        _glfwHandle = (WindowHandle*)(_window.Native?.Glfw
-            ?? throw new InvalidOperationException("Skyline requires the GLFW windowing backend."));
-
-        _window.FramebufferResize += sz =>
-        {
-            if (sz.X <= 0 || sz.Y <= 0) return;
-            var g = new FrameGeom(sz.X, sz.Y, _window.Size.X > 0 ? (float)sz.X / _window.Size.X : _geom.Dpr);
+            var logicalNow = _backend.LogicalSize;
+            var g = new FrameGeom(sz.Width, sz.Height, logicalNow.Width > 0 ? (float)sz.Width / logicalNow.Width : _geom.Dpr);
             if (Host is null)
             {
                 _geom = g;
@@ -78,18 +67,22 @@ public sealed class AppWindow : IDisposable
             }
         };
 
-        _window.StateChanged += state =>
+        _backend.MinimizedChanged += minimized =>
         {
-            _minimized = state == WindowState.Minimized;
+            _minimized = minimized;
             // Wake the render thread so a restore resumes immediately
             // instead of after the idle wait.
             RequestRedraw();
         };
 
-        _window.Render += delta =>
+        _backend.Render += delta =>
         {
-            var fb = _window.FramebufferSize;
-            if (fb.X <= 0 || fb.Y <= 0) return;
+            var f = _backend.FramebufferSize;
+            if (f.Width <= 0 || f.Height <= 0)
+            {
+                return;
+            }
+
             if (IsDirty is { } dirty && !dirty())
             {
                 // Manual present is the only throttle in this stack. An idle
@@ -101,20 +94,9 @@ public sealed class AppWindow : IDisposable
             RenderFrame?.Invoke(Frame(delta));
         };
 
-        _input = _window.CreateInput();
-        foreach (var mouse in _input.Mice)
-        {
-            mouse.MouseMove += (_, pos) => RaisePointer(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0);
-            mouse.MouseDown += (m, btn) => RaisePointer(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0);
-            mouse.MouseUp += (m, btn) => RaisePointer(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0);
-            mouse.Scroll += (m, wheel) => RaisePointer(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y);
-        }
-        foreach (var keyboard in _input.Keyboards)
-        {
-            keyboard.KeyDown += (_, k, _) => RaiseKey(true, k);
-            keyboard.KeyUp += (_, k, _) => RaiseKey(false, k);
-            keyboard.KeyChar += (_, ch) => RaiseText(ch);
-        }
+        _backend.Pointer += e => PointerInput?.Invoke(e);
+        _backend.Key += e => KeyInput?.Invoke(e);
+        _backend.Text += e => TextInput?.Invoke(e);
     }
 
     internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
@@ -128,9 +110,24 @@ public sealed class AppWindow : IDisposable
 
     /// <summary>
     /// The native window as a surface source. Hand this to your renderer
-    /// to create its swapchain (e.g. wgpu's CreateWebGPUSurface).
+    /// to create its swapchain (e.g. wgpu's CreateWebGPUSurface). Throws on
+    /// the native macOS backend, which presents through <see cref="MetalLayer"/>
+    /// instead.
     /// </summary>
-    public INativeWindowSource Surface => _window;
+    public INativeWindowSource Surface => _backend.SurfaceSource is WindowSurfaceSource.Native n
+        ? n.Source
+        : throw new InvalidOperationException(
+            "this window uses the native macOS backend; build the surface with " +
+            "Skyline.Render's WindowGpu.CreateContext/CreateSurface (or FrameLoop), not window.Surface.");
+
+    /// <summary>How this window's backend hands its drawing surface to a presenter.</summary>
+    internal WindowSurfaceSource BackendSurfaceSource => _backend.SurfaceSource;
+
+    /// <summary>
+    /// The window's <c>CAMetalLayer</c> pointer on a native macOS backend, or
+    /// null on GLFW.
+    /// </summary>
+    public nint? MetalLayer => _backend.SurfaceSource is WindowSurfaceSource.MetalLayer m ? m.Layer : null;
 
     /// <summary>Draw and present a frame. Skyline never presents for you.</summary>
     public event Action<FrameInfo>? RenderFrame;
@@ -151,26 +148,32 @@ public sealed class AppWindow : IDisposable
 
     public string Title
     {
-        get => _window.Title;
-        set => _window.Title = value;
+        get => _backend.Title;
+        set => _backend.Title = value;
     }
 
-    public unsafe string? ClipboardText
+    public string? ClipboardText
     {
-        get => _glfw.GetClipboardString(_glfwHandle);
-        set => _glfw.SetClipboardString(_glfwHandle, value ?? string.Empty);
+        get => _backend.ClipboardText;
+        set => _backend.ClipboardText = value;
     }
 
     public FrameInfo CurrentFrame => Frame(0);
 
-    public void RequestClose() => _window.Close();
+    /// <summary>True when this window has been adopted by an <see cref="AppHost"/>. Hosted windows render on the host's thread, so use <c>AppHost.Run</c>, not <see cref="Run"/>.</summary>
+    public bool IsHosted => Host is not null;
+
+    public void RequestClose() => _backend.RequestClose();
 
     /// <summary>Run the event loop. Blocks until the window closes.</summary>
     public int Run()
     {
         if (Host is not null)
+        {
             throw new InvalidOperationException("this window belongs to an AppHost. Call AppHost.Run instead.");
-        _window.Run();
+        }
+
+        _backend.Run();
         return 0;
     }
 
@@ -181,7 +184,7 @@ public sealed class AppWindow : IDisposable
     public void RequestRedraw() => _redraw.Set();
 
     /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
-    public void Resize(int width, int height) => _window.Size = new Vector2D<int>(width, height);
+    public void Resize(int width, int height) => _backend.Resize(width, height);
 
     /// <summary>Minimize the window. Main thread only.</summary>
     public void Minimize()
@@ -190,7 +193,7 @@ public sealed class AppWindow : IDisposable
         // minimize animation, and a hosted render thread must stop touching
         // the swapchain before that.
         _minimized = true;
-        _window.WindowState = WindowState.Minimized;
+        _backend.Minimize();
         RequestRedraw();
     }
 
@@ -198,7 +201,7 @@ public sealed class AppWindow : IDisposable
     public void Restore()
     {
         _minimized = false;
-        _window.WindowState = WindowState.Normal;
+        _backend.Restore();
         RequestRedraw();
     }
 
@@ -207,12 +210,11 @@ public sealed class AppWindow : IDisposable
     /// consumers that drive their own frame loop — engines, benchmarks —
     /// instead of subscribing to <see cref="RenderFrame"/>.
     /// </summary>
-    public void PumpEvents() => _window.DoEvents();
+    public void PumpEvents() => _backend.PumpEventsOnce();
 
     public void Dispose()
     {
-        _input.Dispose();
-        _window.Dispose();
+        _backend.Dispose();
         _redraw.Dispose();
     }
 
@@ -224,7 +226,7 @@ public sealed class AppWindow : IDisposable
 
     // The host-facing seam. The render thread calls these; everything else
     // on this class stays main-thread.
-    internal bool IsClosing => _window.IsClosing;
+    internal bool IsClosing => _backend.IsClosing;
     internal bool IsMinimized => _minimized;
     internal bool ShouldRenderNow => IsDirty?.Invoke() != false;
     internal void RaiseRenderFrame(double delta) => RenderFrame?.Invoke(Frame(delta));

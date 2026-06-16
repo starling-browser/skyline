@@ -13,6 +13,9 @@ public class AppWindowOptionsTests
         Assert.AreEqual(800, o.Width);
         Assert.AreEqual(600, o.Height);
         Assert.IsTrue(o.Resizable);
+        Assert.AreEqual(ChromeMode.Standard, o.Chrome);
+        Assert.IsFalse(o.ForceGlfw);
+        Assert.AreEqual(ChromeMode.Standard, o.EffectiveChrome);
     }
 
     [TestMethod]
@@ -23,5 +26,28 @@ public class AppWindowOptionsTests
         Assert.AreEqual(1, o.Width);
         Assert.AreEqual(2, o.Height);
         Assert.IsFalse(o.Resizable);
+    }
+
+    [TestMethod]
+    public void ChromeAndForceGlfwOverrides()
+    {
+        var o = new AppWindowOptions { Chrome = ChromeMode.Transparent, ForceGlfw = true };
+        Assert.AreEqual(ChromeMode.Transparent, o.Chrome);
+        Assert.IsTrue(o.ForceGlfw);
+    }
+
+    [TestMethod]
+    public void NonResizableStandardFoldsToFixed()
+    {
+        var o = new AppWindowOptions { Resizable = false };
+        Assert.AreEqual(ChromeMode.Fixed, o.EffectiveChrome);
+    }
+
+    [TestMethod]
+    public void ResizableDoesNotOverrideExplicitChrome()
+    {
+        // A non-Standard mode is honored as-is; Resizable only folds Standard.
+        var o = new AppWindowOptions { Chrome = ChromeMode.Borderless, Resizable = false };
+        Assert.AreEqual(ChromeMode.Borderless, o.EffectiveChrome);
     }
 }

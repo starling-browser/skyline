@@ -2,6 +2,9 @@ using Silk.NET.WebGPU;
 using Skyline;
 using Skyline.Gpu;
 using Skyline.Input;
+using Skyline.Interaction;
+using Skyline.Interaction.Ui;
+using Skyline.Render;
 
 // Windowed tests as a console app, not MSTest: GLFW (via Cocoa) requires
 // the main thread for window creation and event processing, and test
@@ -14,7 +17,11 @@ var checks = 0;
 void Check(bool condition, string what)
 {
     checks++;
-    if (condition) return;
+    if (condition)
+    {
+        return;
+    }
+
     failures++;
     Console.Error.WriteLine($"FAIL: {what}");
 }
@@ -36,6 +43,22 @@ win.ClipboardText = "skyline-test";
 Check(win.ClipboardText == "skyline-test", "clipboard round-trips");
 
 win.PumpEvents(); // must not throw without a host
+
+// --- Chrome modes construct on the GLFW backend ------------------------
+
+foreach (var chrome in new[] { ChromeMode.Fixed, ChromeMode.Borderless, ChromeMode.Transparent })
+{
+    using var chromed = new AppWindow(new AppWindowOptions
+    {
+        Title = $"chrome {chrome}",
+        Width = 160,
+        Height = 120,
+        Chrome = chrome,
+        ForceGlfw = true,
+    });
+    var cf = chromed.CurrentFrame;
+    Check(cf.PixelWidth > 0 && cf.PixelHeight > 0, $"{chrome} window constructs with a real surface");
+}
 
 var soloResized = false;
 win.Resized += _ => soloResized = true;
@@ -78,7 +101,31 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
     var caps = surface!.Capabilities;
     Check(caps.PresentModes.Length > 0, "capabilities report present modes");
     Check(caps.Supports(PresentMode.Fifo), "Fifo is supported everywhere");
+    Check(caps.AlphaModes.Length > 0, "capabilities report alpha modes");
+    Check(caps.Supports(caps.AlphaModes[0]), "the first reported alpha mode is supported");
     Check(ReferenceEquals(caps, surface.Capabilities), "capabilities are cached");
+
+    // An unsupported alpha mode must throw a managed error, not abort the
+    // process.
+    var unsupportedAlpha = CompositeAlphaMode.Opaque;
+    var foundUnsupportedAlpha = false;
+    foreach (var m in new[] { CompositeAlphaMode.Opaque, CompositeAlphaMode.Premultiplied, CompositeAlphaMode.Unpremultiplied, CompositeAlphaMode.Inherit })
+    {
+        if (!caps.Supports(m)) { unsupportedAlpha = m; foundUnsupportedAlpha = true; break; }
+    }
+    Check(foundUnsupportedAlpha && !caps.Supports(unsupportedAlpha), "the surface rejects at least one alpha mode");
+    using (var alphaGpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfaceOptions { AlphaMode = unsupportedAlpha }))
+    {
+        var alphaThrew = false;
+        try { alphaGpu.Surface!.Configure(frame.PixelWidth, frame.PixelHeight); }
+        catch (InvalidOperationException) { alphaThrew = true; }
+        Check(alphaThrew, "Configure throws on an unsupported alpha mode");
+    }
+    using (var alphaOkGpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfaceOptions { AlphaMode = caps.AlphaModes[0] }))
+    {
+        alphaOkGpu.Surface!.Configure(frame.PixelWidth, frame.PixelHeight);
+        Check(alphaOkGpu.Surface.PixelSize.Width > 0, "Configure accepts a supported alpha mode");
+    }
 
     surface.PresentMode = caps.ChoosePresentMode(PresentMode.Fifo);
     Check(surface.PresentMode == PresentMode.Fifo, "PresentMode property holds the choice");
@@ -86,6 +133,7 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
 
     surface.Configure(frame.PixelWidth, frame.PixelHeight);
     Check(surface.PixelSize == (frame.PixelWidth, frame.PixelHeight), "Configure records pixel size");
+    Check(surface.PresentCount == 0, "PresentCount starts at zero");
 
     var presentWithoutAcquire = false;
     try { surface.Present(); } catch (InvalidOperationException) { presentWithoutAcquire = true; }
@@ -115,6 +163,7 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
         Check(doubleAcquire, "double acquire throws");
 
         surface.CancelFrame(); // release without presenting
+        Check(surface.PresentCount == 0, "CancelFrame does not count a present");
         Check(surface.TryAcquireFrame(), "acquire works again after CancelFrame");
 
         // Clear the swapchain texture and read it back: end-to-end proof
@@ -143,6 +192,7 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
             var px = readback.Resolve();
             Check(px[2] >= 254 && px[0] <= 1, "swapchain clear is red in readback (BGRA)");
             surface.Present();
+            Check(surface.PresentCount == 1, "Present increments PresentCount");
         }
     }
     else
@@ -152,11 +202,38 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
 
     // A second window on the same device.
     using var second = new AppWindow(new AppWindowOptions { Title = "second", Width = 160, Height = 120 });
-    using var secondSurface = gpu.CreateSurface(second.Surface!);
     var sf = second.CurrentFrame;
-    secondSurface.Configure(sf.PixelWidth, sf.PixelHeight);
-    Check(secondSurface.TryAcquireFrame(), "second surface on the shared device acquires");
-    secondSurface.CancelFrame();
+    using (var secondSurface = gpu.CreateSurface(second.Surface!))
+    {
+        secondSurface.Configure(sf.PixelWidth, sf.PixelHeight);
+        Check(secondSurface.TryAcquireFrame(), "second surface on the shared device acquires");
+        secondSurface.CancelFrame();
+        Check(secondSurface.PresentCount == 0, "second surface CancelFrame does not count a present");
+    }
+
+    // The SurfaceFactory overload of CreateSurface — the native-macOS /
+    // multi-window eject. Exercised here with a GLFW window's factory, after the
+    // first surface is disposed so only one swapchain configures the window.
+    unsafe
+    {
+        using var factorySurface = gpu.CreateSurface(second.Surface!.CreateWebGPUSurface);
+        factorySurface.Configure(sf.PixelWidth, sf.PixelHeight);
+        Check(factorySurface.TryAcquireFrame(), "factory-built surface on the shared device acquires");
+        factorySurface.CancelFrame();
+    }
+}
+
+// --- GPU via the caller-supplied surface factory -------------------------
+
+// The eject seam: a caller-built WebGPU api object and an explicit surface
+// factory, no window helper inside Create.
+unsafe
+{
+    using var ejected = GpuContext.Create(WebGPU.GetApi(), win.Surface!.CreateWebGPUSurface);
+    Check(ejected.Surface is not null, "factory-created context exposes a surface");
+    ejected.Surface!.Configure(frame.PixelWidth, frame.PixelHeight);
+    Check(ejected.Surface.TryAcquireFrame(), "factory-created surface acquires");
+    ejected.Surface.CancelFrame();
 }
 
 win.Dispose();
@@ -171,7 +248,10 @@ using (var solo = new AppWindow(new AppWindowOptions { Title = "solo", Width = 1
     solo.RenderFrame += f =>
     {
         frames++;
-        if (frames >= 3) solo.RequestClose();
+        if (frames >= 3)
+        {
+            solo.RequestClose();
+        }
     };
     Check(solo.Run() == 0, "Run returns 0 after RequestClose");
     Check(frames >= 3, "RenderFrame fired through the built-in loop");
@@ -222,16 +302,31 @@ using (var host = new AppHost())
         renderThreadA = Environment.CurrentManagedThreadId;
         framesA++;
         Thread.Sleep(5); // pace so main-thread invokes interleave deterministically
-        if (framesA == 2) host.Invoke(() => invokeRanOnMain = Environment.CurrentManagedThreadId);
-        if (framesA == 3) host.Invoke(winA.Minimize);
-        if (framesA >= 10 && restoredA) winA.RequestClose();
+        if (framesA == 2)
+        {
+            host.Invoke(() => invokeRanOnMain = Environment.CurrentManagedThreadId);
+        }
+
+        if (framesA == 3)
+        {
+            host.Invoke(winA.Minimize);
+        }
+
+        if (framesA >= 10 && restoredA)
+        {
+            winA.RequestClose();
+        }
     };
     winB.RenderFrame += _ =>
     {
         renderThreadB = Environment.CurrentManagedThreadId;
         framesB++;
         Thread.Sleep(5);
-        if (framesB == 10) host.Invoke(() => winB.Resize(220, 160));
+        if (framesB == 10)
+        {
+            host.Invoke(() => winB.Resize(220, 160));
+        }
+
         if (framesB == 30)
         {
             // Window A has been minimized for ~135 ms of 5 ms frames: its
@@ -244,10 +339,12 @@ using (var host = new AppHost())
                 restoredA = true;
             });
         }
-        // Close once the resize round-trip has been observed (Cocoa can
-        // defer the resize callback through the window-open animation),
-        // with a generous cap so a real failure fails instead of hanging.
-        if ((framesB >= 40 && hostedResizeThread != 0) || framesB >= 600) winB.RequestClose();
+        // Close once the resize round-trip has been observed, with a generous
+        // cap so a real failure fails instead of hanging.
+        if ((framesB >= 40 && hostedResizeThread != 0) || framesB >= 600)
+        {
+            winB.RequestClose();
+        }
     };
     host.WindowClosed += w =>
     {
@@ -270,7 +367,69 @@ using (var host = new AppHost())
     Check(closedBeforeDispose == 2, "WindowClosed fired for both windows before dispose");
 }
 
+// --- AppHost: adopting a window after Run has started -------------------
+
+using (var host = new AppHost())
+{
+    var first = new AppWindow(new AppWindowOptions { Title = "first", Width = 160, Height = 120 });
+    host.AddWindow(first);
+
+    var mainThread = Environment.CurrentManagedThreadId;
+    AppWindow? late = null;
+    var addedLate = false;
+    var lateRendered = false;
+    var lateThread = 0;
+    var lateFrames = 0;
+    var firstFrames = 0;
+
+    first.RenderFrame += _ =>
+    {
+        firstFrames++;
+        Thread.Sleep(2); // pace so the late window's thread has time to spin up
+        // Adopt a second window mid-run, from the main thread. AddWindow must
+        // start its render thread immediately because the host is running.
+        if (firstFrames == 2 && !addedLate)
+        {
+            addedLate = true;
+            host.Invoke(() =>
+            {
+                late = new AppWindow(new AppWindowOptions { Title = "late", Width = 160, Height = 120 });
+                late.RenderFrame += _ =>
+                {
+                    lateThread = Environment.CurrentManagedThreadId;
+                    lateRendered = true;
+                    if (++lateFrames >= 3)
+                    {
+                        late!.RequestClose();
+                    }
+                };
+                host.AddWindow(late);
+            });
+        }
+        // Hold first open until the late window has proved it renders, with a
+        // generous cap so a real failure fails instead of hanging.
+        if (lateRendered || firstFrames >= 600)
+        {
+            first.RequestClose();
+        }
+    };
+
+    Check(host.Run() == 0, "Run returns after a late-added window also closes");
+    Check(lateRendered, "a window added to a running host starts rendering");
+    Check(lateThread != mainThread && lateThread != 0, "the late window renders off the main thread");
+}
+
 // --- AppHost edge paths --------------------------------------------------
+
+{
+    // Retiring a window with no WindowClosed subscriber must not throw: the
+    // null-conditional invoke in Retire is the branch under test.
+    var hostZ = new AppHost();
+    hostZ.AddWindow(new AppWindow(new AppWindowOptions { Title = "no-subscriber", Width = 160, Height = 120 }));
+    var clean = true;
+    try { hostZ.Dispose(); } catch { clean = false; }
+    Check(clean, "Dispose with no WindowClosed subscriber retires cleanly");
+}
 
 {
     // A throwing Invoke action must still clean up.
@@ -296,6 +455,209 @@ using (var host = new AppHost())
     hostY.WindowClosed += _ => closedY = true;
     hostY.Dispose();
     Check(closedY, "Dispose retires windows that never ran");
+}
+
+// --- Skyline.Render: FrameLoop on real windows --------------------------
+
+// Attach builds its own device, drives a single-window Run loop, idles until
+// RequestRedraw, reconfigures on resize, and exposes every raw handle.
+using (var rwin = new AppWindow(new AppWindowOptions { Title = "frameloop attach", Width = 200, Height = 150 }))
+{
+    Check(!rwin.IsHosted, "a standalone window reports IsHosted false");
+    var rframes = 0;
+    var ejectSeen = false;
+    var rloopResized = false;
+    rwin.Resized += _ => rloopResized = true;
+
+    using var loop = FrameLoop.Attach(rwin, new FrameLoopOptions
+    {
+        ClearColor = new Silk.NET.WebGPU.Color { R = 0.0, G = 0.4, B = 0.8, A = 1.0 },
+    });
+    Check(ReferenceEquals(loop.Surface, loop.Gpu.Surface), "FrameLoop.Surface is the context surface");
+    Check(loop.Pacer.MaxFramesInFlight == 2, "FrameLoop exposes its pacer");
+
+    // Resize between frames (before Run), so FrameLoop.OnResized reconfigures
+    // with no frame in flight — the order the render loop guarantees.
+    rwin.Resize(220, 165);
+    rwin.PumpEvents();
+    Check(rloopResized, "FrameLoop reconfigures on resize");
+
+    loop.OnRender = (in Frame f) =>
+    {
+        rframes++;
+        unsafe
+        {
+            if (f.Encoder != null && f.View != null && f.Pass != null)
+            {
+                ejectSeen = true;
+            }
+        }
+        loop.RequestRedraw();                     // self-perpetuate (Continuous=false)
+        if (rframes >= 4)
+        {
+            rwin.RequestClose();
+        }
+    };
+    loop.RequestRedraw();                          // kick the first frame
+    Check(rwin.Run() == 0, "FrameLoop.Attach drives a window Run loop to close");
+    Check(rframes >= 4, "FrameLoop OnRender fired each frame");
+    Check(ejectSeen, "Frame exposes a live encoder, view, and started pass");
+}
+
+// Over borrows a caller-owned device, renders continuously, and leaves the
+// context alone on dispose.
+using (var owin = new AppWindow(new AppWindowOptions { Title = "frameloop over", Width = 160, Height = 120 }))
+using (var ogpu = GpuContext.Create(owin.Surface))
+{
+    using var opacer = new FramePacer(ogpu, 2); // Over borrows the pacer; the test owns it
+    var oframes = 0;
+    using (var loop = FrameLoop.Over(owin, ogpu, ogpu.Surface!, opacer, new FrameLoopOptions { Continuous = true }))
+    {
+        loop.OnRender = (in Frame f) => { if (++oframes >= 3) { owin.RequestClose(); } };
+        Check(owin.Run() == 0, "FrameLoop.Over drives a Run loop with a borrowed device");
+        Check(oframes >= 3, "Over OnRender fired");
+    }
+    Check(ogpu.Poll(wait: false), "Over leaves the borrowed context alive after its loop disposes");
+}
+
+// Attach refuses a window adopted by an AppHost.
+using (var ahost = new AppHost())
+{
+    var hwin = new AppWindow(new AppWindowOptions { Title = "hosted", Width = 160, Height = 120 });
+    ahost.AddWindow(hwin);
+    Check(hwin.IsHosted, "AddWindow marks the window hosted");
+    var refused = false;
+    try { FrameLoop.Attach(hwin); } catch (InvalidOperationException) { refused = true; }
+    Check(refused, "FrameLoop.Attach refuses a hosted window");
+}
+
+// A throwing OnRender is captured, the loop closes the window, and the error
+// surfaces as Outcome's Err case — never out of Run, which would break dispose.
+using (var fwin = new AppWindow(new AppWindowOptions { Title = "frameloop fault", Width = 160, Height = 120 }))
+{
+    using var loop = FrameLoop.Attach(fwin, new FrameLoopOptions { Continuous = true });
+    var ff = 0;
+    loop.OnRender = (in Frame f) => { if (++ff >= 2) { throw new InvalidOperationException("boom in draw"); } };
+    fwin.Run(); // returns normally — the loop closed itself on the fault
+    Check(loop.Outcome is Err { Error: InvalidOperationException }, "a throwing OnRender surfaces as Outcome's Err case");
+}
+
+// --- Skyline.Interaction.Ui: the composited approvals overlay -----------
+
+// The overlay draws its panel and buttons on top of an app frame through a
+// LoadOp.Load pass. Here we only prove the wgpu encode lands pixels.
+using (var iwin = new AppWindow(new AppWindowOptions { Title = "approvals overlay", Width = 200, Height = 150 }))
+using (var igpu = GpuContext.Create(iwin.Surface!, surfaceOptions: new WindowSurfaceOptions { ExtraUsage = TextureUsage.CopySrc }))
+{
+    igpu.UncapturedError += (t, m) => Check(false, $"overlay wgpu error ({t}): {m}");
+    var isurface = igpu.Surface!;
+    var iframe = iwin.CurrentFrame;
+    isurface.Configure(iframe.PixelWidth, iframe.PixelHeight);
+
+    var clip = new AppWindowClipboard(iwin);
+    clip.Text = "via-overlay-clipboard";
+    Check(clip.Text == "via-overlay-clipboard", "AppWindowClipboard round-trips through the window");
+
+    var redraws = 0;
+    using var overlay = new ApprovalsOverlay(igpu, isurface.Format, requestRedraw: () => redraws++);
+    Check(!overlay.State.Snapshot.HasModal, "a fresh overlay starts with no modal");
+
+    // An idle Encode draws nothing and never builds a pipeline.
+    if (isurface.TryAcquireFrame())
+    {
+        unsafe
+        {
+            var idleEnc = igpu.Api.DeviceCreateCommandEncoder(igpu.DeviceHandle, (CommandEncoderDescriptor*)null);
+            overlay.Encode(isurface.CurrentView, idleEnc, iframe);
+            var idleCmd = igpu.Api.CommandEncoderFinish(idleEnc, (CommandBufferDescriptor*)null);
+            igpu.Api.QueueSubmit(igpu.QueueHandle, 1, &idleCmd);
+            igpu.Api.CommandBufferRelease(idleCmd);
+            igpu.Api.CommandEncoderRelease(idleEnc);
+        }
+        isurface.CancelFrame();
+    }
+
+    // Raise a request through the IApprovalUi seam, draw it, read the Allow
+    // button back, then answer it through the pointer sink.
+    var planner = new Actor("planner", "Planner", ActorKind.Ai, ActorLocality.Local);
+    var decision = overlay.RequestAsync(
+        new ApprovalRequest("w1", planner, InteractionCapability.Edit, "Planner wants to type", null, true));
+    Check(redraws >= 1, "RequestAsync asks for a redraw");
+    var pendingSnapshot = overlay.State.Snapshot;
+    Check(pendingSnapshot.HasModal, "the request is pending");
+
+    var layout = overlay.State.Layout(iframe.LogicalWidth, iframe.LogicalHeight);
+    var allowX = layout.Allow.X + layout.Allow.Width / 2f;
+    var allowY = layout.Allow.Y + layout.Allow.Height / 2f;
+
+    if (isurface.TryAcquireFrame())
+    {
+        unsafe
+        {
+            using var readback = new TextureReadback(igpu, isurface.PixelSize.Width, isurface.PixelSize.Height);
+            var enc = igpu.Api.DeviceCreateCommandEncoder(igpu.DeviceHandle, (CommandEncoderDescriptor*)null);
+
+            // Clear to black so the overlay composites over a known background.
+            var att = new RenderPassColorAttachment
+            {
+                View = isurface.CurrentView,
+                LoadOp = LoadOp.Clear,
+                StoreOp = StoreOp.Store,
+                ClearValue = new Silk.NET.WebGPU.Color { R = 0, G = 0, B = 0, A = 1 },
+            };
+            var pd = new RenderPassDescriptor { ColorAttachmentCount = 1, ColorAttachments = &att };
+            var clearPass = igpu.Api.CommandEncoderBeginRenderPass(enc, in pd);
+            igpu.Api.RenderPassEncoderEnd(clearPass);
+            igpu.Api.RenderPassEncoderRelease(clearPass);
+
+            overlay.Encode(isurface.CurrentView, enc, iframe);  // builds the pipeline and draws
+            overlay.Encode(isurface.CurrentView, enc, iframe);  // reuses the cached pipeline
+
+            readback.Encode(enc, isurface.CurrentTexture);
+            var cmd = igpu.Api.CommandEncoderFinish(enc, (CommandBufferDescriptor*)null);
+            igpu.Api.QueueSubmit(igpu.QueueHandle, 1, &cmd);
+            igpu.Api.CommandBufferRelease(cmd);
+            igpu.Api.CommandEncoderRelease(enc);
+
+            var px = readback.Resolve();
+            var width = isurface.PixelSize.Width;
+
+            // Above the centered label the button is solid green fill.
+            var fillCx = (int)(allowX * iframe.Dpr);
+            var fillCy = (int)((layout.Allow.Y + 2f) * iframe.Dpr);
+            var fill = (fillCy * width + fillCx) * 4;
+            Check(px[fill + 1] > 120 && px[fill + 2] < 90, "Allow button draws green in readback (BGRA)");
+
+            // Across the button's middle row, the white label leaves bright pixels.
+            var labelRow = (int)(allowY * iframe.Dpr);
+            var labelFound = false;
+            for (var sx = (int)(layout.Allow.X * iframe.Dpr); sx < (int)((layout.Allow.X + layout.Allow.Width) * iframe.Dpr); sx++)
+            {
+                var o = (labelRow * width + sx) * 4;
+                if (px[o] > 200 && px[o + 1] > 200 && px[o + 2] > 200)
+                {
+                    labelFound = true;
+                    break;
+                }
+            }
+            Check(labelFound, "the Allow label draws white pixels over the button");
+            isurface.Present();
+        }
+    }
+
+    overlay.OnPointerDown(allowX, allowY);
+    Check(decision.IsCompleted && decision.Result.Verb == ApprovalVerb.Allow, "clicking Allow resolves the request");
+
+    overlay.Dispose();
+    overlay.Dispose(); // idempotent
+}
+
+// The default TimeProvider and redraw constructor arguments.
+using (var dwin = new AppWindow(new AppWindowOptions { Title = "overlay defaults", Width = 160, Height = 120 }))
+using (var dgpu = GpuContext.Create(dwin.Surface!))
+{
+    using var defaults = new ApprovalsOverlay(dgpu, dgpu.Surface!.Format);
+    Check(!defaults.State.Snapshot.HasModal, "a fresh overlay has no modal");
 }
 
 Console.WriteLine(failures == 0

@@ -79,9 +79,55 @@ windows, and touching their swapchain would hang the thread. Idle is
 event-driven: the pump sleeps in `WaitEventsTimeout`, input wakes it
 instantly, and `Wake()`/`RequestRedraw()` wake it from any thread.
 
+## Windowing backends
+
+`AppWindow` does not talk to GLFW directly. It sits on an internal
+`IWindowBackend` seam, and a factory picks the backend when the window
+is created:
+
+- **GLFW** (`GlfwWindowBackend`) on Windows and Linux, and on macOS when
+  asked. The portable path, through Silk.NET.
+- **AppKit** (`Skyline.Apple`, a separate `net*-macos` assembly) on
+  macOS by default. A real `NSWindow` with a `CAMetalLayer` content
+  view, so it can render native chrome GLFW cannot reach.
+
+The core stays one portable assembly. It never references `Skyline.Apple`
+at build time. On macOS it loads that assembly by name at run time, and
+falls back to GLFW if it is absent or `AppWindowOptions.ForceGlfw` is
+set. An app opts into native chrome just by referencing `Skyline.Apple`.
+
+`ChromeMode` (`Standard`, `Fixed`, `Borderless`, `Transparent`) maps to
+each backend's own settings. On GLFW it sets the window border and the
+transparent-framebuffer flag. On AppKit it sets the `NSWindow` style
+mask, and `Transparent` turns on a see-through title bar with content
+under it. Both mapping tables are pure functions in the core, so they
+are tested without a window.
+
+The two backends hand their surface to a presenter in different shapes:
+GLFW gives a Silk.NET `INativeWindowSource`, AppKit gives a
+`CAMetalLayer` pointer through wgpu's surface factory — the same eject an
+iOS app uses. `Skyline.Render` owns the bridge that picks the right one,
+because it is the only layer that depends on both the window host and
+`Skyline.Gpu`. `AppWindow.Surface` returns the Silk.NET source on GLFW
+and throws on AppKit, where `AppWindow.MetalLayer` is the path instead.
+
+`AppHost` drives the one process pump (`IWindowEventPump`) the active
+backend provides. The AppKit pump drains `NSApplication` events with a
+non-blocking `nextEventMatchingMask` loop, matching GLFW's poll-and-sleep
+cadence. It never calls `NSApplication.run`, which would block and break
+`Invoke` latency.
+
+`Skyline.Apple` builds and runs only on macOS with the `macos` workload,
+so it sits outside the 100% line-coverage gate, like `Guard.cs`. The
+logic that can be tested off a Mac — the chrome tables, the backend
+choice, the surface dispatch — lives in the covered core, exercised
+through an injectable backend seam. Only the AppKit calls and the
+reflective load are Mac-only and excluded.
+
 ## What the window host owns
 
-- Window creation with OS chrome (GLFW via Silk.NET) and DPI tracking.
+- Window creation with OS chrome — GLFW or native AppKit, by
+  `ChromeMode` — and DPI tracking.
 - The event loop, with dirty-frame pacing (`IsDirty`). Idle apps sleep
   instead of free-running a core.
 - Input as plain structs: pointer, key, and text events. No Silk.NET
@@ -97,7 +143,10 @@ through `AppWindow.Surface` (Silk.NET's `INativeWindowSource`).
 The parts of WebGPU every app rewrites, and nothing more:
 
 - The init chain: instance → surface → adapter → device → queue
-  (`GpuContext`), with device-lost and uncaptured-error events.
+  (`GpuContext`), with device-lost and uncaptured-error events. A second
+  `Create` overload takes a caller-built `WebGPU` and a surface factory —
+  the eject for platforms the Silk.NET window helper doesn't cover, such
+  as an iOS `CAMetalLayer` (see `samples/HelloClear.Ios`).
 - The swapchain (`WindowSurface`): configure, acquire, present. A stale
   swapchain (resize, display change) reconfigures itself and skips the
   frame instead of handing out a dead texture.
@@ -120,17 +169,34 @@ encode passes against CurrentView      ◀── your code, raw wgpu
 submit, then Present (Skyline.Gpu)
 ```
 
-## The design rule: mirror WebGPU, don't abstract it
+## The design rule: mirror WebGPU, batteries with an eject
 
 WebGPU is already the portability layer — one spec, many
-implementations. A second abstraction on top would add a vocabulary to
-learn and hide capability, without adding any portability. So
-Skyline.Gpu uses WebGPU's own vocabulary (Silk.NET types in options, raw
-handles via `GpuContext.Api`, `DeviceHandle`,
-`WindowSurface.CurrentView`, …) and wraps no encoder, pipeline, or draw
-call. Everything past setup and present is your code against raw wgpu.
-Additions that invent a renderer API on top of WebGPU belong in a
-different library.
+implementations. A second vocabulary on top would hide capability
+without adding portability. So Skyline.Gpu keeps WebGPU's own
+vocabulary: Silk.NET types in options, raw handles via `GpuContext.Api`,
+`DeviceHandle`, `WindowSurface.CurrentView`, and the rest.
+
+Helpers that shorten common WebGPU code are welcome. Three promises
+keep them honest:
+
+- **Defaults, not decisions.** A helper fills WebGPU's own descriptors
+  with defaults you can override. It never invents a new concept.
+- **Your encoder, your frame.** A helper that encodes work encodes into
+  an encoder you pass in. Nothing submits or presents behind your back.
+- **Raw handles in and out.** Helpers take and return raw Silk.NET
+  handles, so helper code and raw code mix freely in one frame.
+
+The eject is the contract: anything a helper does, you can write
+yourself against raw wgpu, one property away. A Skyline-family layer
+**may** own, composite, and present the frame — `Skyline.Render`'s
+`FrameLoop` already does, and the interaction tier's approvals overlay
+draws on top of it. The live rule is **reachability**, not abstinence:
+the raw input path stays public on `AppWindow`, the raw frame path stays
+reachable on `Frame` and through `BeginClearPass = false`, and any
+owning layer stays optional, so plain `FrameLoop` works without it.
+Nothing hides behind an opaque abstraction. Only hiding wgpu is
+forbidden.
 
 **Why not just Silk.NET?** Silk.NET is the binding — a one-to-one,
 unsafe mapping of the C API. You get raw pointers, manual release calls,

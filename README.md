@@ -24,6 +24,10 @@ return win.Run();
 
 - **A window in one line.** OS chrome, event loop, DPI tracking, and
   clipboard. Input arrives as plain C# structs — pointer, key, text.
+- **The chrome you ask for.** Pick standard, fixed, borderless, or
+  transparent with one option. On macOS you get real native chrome — a
+  see-through title bar with content drawn under it. Other platforms get
+  the matching GLFW window. Same code either way.
 - **A GPU without the boilerplate.** The few hundred lines of unsafe
   setup every wgpu app starts with — instance, adapter, device, error
   callbacks that crash if you forget to root them — already written and
@@ -68,8 +72,9 @@ Two windows on one device, each with its own render thread:
 dotnet run --project samples/TwoWindows
 ```
 
-A textured quad with an app-owned shader pipeline, vertex buffer,
-texture, sampler, and bind group:
+The Milky Way as a slowly turning spiral galaxy, drawn by one app-owned
+full-screen shader — a glowing core, spiral arms, dust lanes, and a field
+of stars:
 
 ```sh
 dotnet run --project samples/TexturedQuad
@@ -80,6 +85,47 @@ An interactive canvas that turns pointer input into dynamic GPU geometry:
 ```sh
 dotnet run --project samples/InteractiveCanvas
 ```
+
+The approvals overlay from the interaction tier, drawn on top of an app
+frame. Each prompt says who is asking, what they want, and how long you
+have to answer — a kind-colored badge, the request in plain words, and a
+countdown that runs green to red. Answer with the mouse — Allow, Allow
+once, or Deny. Each answer flashes a banner that says what you chose:
+
+```sh
+dotnet run --project samples/Approvals
+```
+
+## Window chrome
+
+Pick the kind of window with one option:
+
+```csharp
+using var win = new AppWindow(new()
+{
+    Title = "borderless",
+    // Standard, Fixed, Borderless, Transparent, UnifiedTitlebar
+    Chrome = ChromeMode.Borderless,
+});
+```
+
+On macOS, `Transparent` is a real native title bar that content draws
+under, with a see-through backing so the desktop shows behind the window.
+`UnifiedTitlebar` is the same merged-toolbar look on a solid window: the
+traffic lights float over the content and there is no separate top bar.
+To get either, the app references the `Skyline.Apple` backend. The core
+finds it at run time and uses it. There is nothing else to wire up. Set
+`ForceGlfw = true` to opt back to the portable window on any platform.
+
+```sh
+# macOS, needs the macos workload
+dotnet run --project samples/TransparentWindow   # drag the slider to change the transparency
+dotnet run --project samples/UnifiedTitlebar     # opaque, merged title bar
+```
+
+On Windows and Linux the same `ChromeMode` maps to the matching GLFW
+window. A native backend for those platforms can slot into the same
+seam later.
 
 ## Tests
 
@@ -101,7 +147,10 @@ Run everything and get the merged report:
 The only excluded lines are native-failure guards (no GPU adapter, no
 device, surface creation refused) collected in `Skyline.Gpu/Guard.cs` —
 they cannot fire on a working machine, and the exclusion is documented
-there.
+there. The macOS backend (`src/Skyline.Apple`) is a native, Mac-only
+assembly outside this gate. It builds and runs only on macOS with the
+`macos` workload, so it is checked on Apple hardware, not by the line
+gate. Its decision logic lives in the covered core.
 
 ## Requirements
 
@@ -111,18 +160,23 @@ there.
 
 ## Design
 
-The rule behind the library: **mirror WebGPU, don't abstract it.**
-Skyline wraps setup and present — the parts every app rewrites — and no
-encoder, pipeline, or draw call. What each project owns, why this beats
-a renderer abstraction, what Skyline adds over raw Silk.NET, and how
-present modes and buffering work: [ARCHITECTURE.md](ARCHITECTURE.md).
+The rule behind the library: **mirror WebGPU, batteries with an eject.**
+Helpers fill WebGPU's own descriptors with overridable defaults, encode
+only into encoders you pass in, and take and return raw handles — so
+helper code and raw wgpu mix freely in the same frame.
+What each project owns, why this beats a renderer abstraction, what
+Skyline adds over raw Silk.NET, and how present modes and buffering
+work: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Status
 
 Early. The window host, the WebGPU layer, and the sample are real and
 tested on macOS. Windows and Linux paths exist through GLFW and wgpu but
-are not yet exercised. Planned next: key modifier state and pointer
-enter/leave.
+are not yet exercised. The native macOS chrome backend
+(`Skyline.Apple`) is new — it ships the committed-character text path,
+not full input-method editor composition yet. Planned next: key modifier
+state, pointer enter and leave, and native backends for Windows and
+Linux.
 
 ## License
 

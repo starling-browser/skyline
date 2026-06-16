@@ -12,16 +12,17 @@ dotnet test Skyline.slnx --no-build --collect:"XPlat Code Coverage" --results-di
 
 # The windowed harness needs the main thread (GLFW on macOS), so it runs
 # as an instrumented process instead of under a test runner.
-dotnet coverlet tests/Skyline.WindowedTests/bin/Debug/net10.0/Skyline.WindowedTests.dll \
+dotnet coverlet tests/Skyline.WindowedTests/bin/Debug/net11.0/Skyline.WindowedTests.dll \
   --target dotnet \
-  --targetargs "tests/Skyline.WindowedTests/bin/Debug/net10.0/Skyline.WindowedTests.dll" \
-  --include "[Skyline]*" --include "[Skyline.Gpu]*" \
+  --targetargs "tests/Skyline.WindowedTests/bin/Debug/net11.0/Skyline.WindowedTests.dll" \
+  --include "[Skyline]*" --include "[Skyline.Gpu]*" --include "[Skyline.Render]*" \
+  --include "[Skyline.Interaction]*" --include "[Skyline.Interaction.Ui]*" \
   --format cobertura --output coverage/windowed.cobertura.xml
 
 dotnet reportgenerator \
   -reports:"coverage/unit/*/coverage.cobertura.xml;coverage/windowed.cobertura.xml" \
   -targetdir:coverage/report \
   "-reporttypes:TextSummary" \
-  "-assemblyfilters:+Skyline;+Skyline.Gpu"
+  "-assemblyfilters:+Skyline;+Skyline.Gpu;+Skyline.Render;+Skyline.Interaction;+Skyline.Interaction.Ui"
 
 cat coverage/report/Summary.txt

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using Silk.NET.WebGPU;
 
 namespace Skyline.Gpu;
@@ -13,8 +15,7 @@ namespace Skyline.Gpu;
 ///
 /// Steady-state cost per frame: one native call and two interlocked
 /// operations. No allocation — the completion callback is created once
-/// and reused. Requires the wgpu-native poll extension, like
-/// <see cref="TextureReadback"/>.
+/// and reused. Requires the wgpu-native poll extension.
 /// </summary>
 public sealed unsafe class FramePacer : IDisposable
 {
@@ -29,11 +30,17 @@ public sealed unsafe class FramePacer : IDisposable
     public FramePacer(GpuContext context, int maxFramesInFlight = 2)
     {
         if (maxFramesInFlight < 1)
+        {
             throw new ArgumentOutOfRangeException(nameof(maxFramesInFlight), "at least one frame must be allowed in flight");
+        }
         // Fail before any callback is registered: without polling, Wait
         // could never pump completions and Dispose could never drain, so a
         // registered callback could outlive the pacer.
-        if (!context.SupportsPoll) Guard.FailPollRequired("frame pacing");
+        if (!context.SupportsPoll)
+        {
+            Guard.FailPollRequired("frame pacing");
+        }
+
         _context = context;
         MaxFramesInFlight = maxFramesInFlight;
         // Decrement on every status, not just Success: an error or device
@@ -54,7 +61,9 @@ public sealed unsafe class FramePacer : IDisposable
     public void Wait()
     {
         while (Volatile.Read(ref _inFlight) >= MaxFramesInFlight)
+        {
             _context.Poll(wait: true);
+        }
     }
 
     /// <summary>
@@ -63,7 +72,11 @@ public sealed unsafe class FramePacer : IDisposable
     /// </summary>
     public bool TryWait()
     {
-        if (Volatile.Read(ref _inFlight) < MaxFramesInFlight) return true;
+        if (Volatile.Read(ref _inFlight) < MaxFramesInFlight)
+        {
+            return true;
+        }
+
         _context.Poll(wait: false);
         return Volatile.Read(ref _inFlight) < MaxFramesInFlight;
     }
@@ -80,12 +93,19 @@ public sealed unsafe class FramePacer : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         // Drain so no callback fires into a disposed pacer. The constructor
         // guarantees polling exists, so this always terminates.
         while (Volatile.Read(ref _inFlight) > 0)
+        {
             _context.Poll(wait: true);
+        }
+
         _onWorkDone.Dispose();
     }
 }

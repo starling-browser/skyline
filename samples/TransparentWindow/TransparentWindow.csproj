@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0-macos</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <RootNamespace>TransparentWindow</RootNamespace>
+    <ApplicationId>dev.starling.transparentwindow</ApplicationId>
+    <ApplicationTitle>TransparentWindow</ApplicationTitle>
+    <!-- wgpu surface interop is pointer-based. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- The macos workload band pins a recommended Xcode (26.4); a newer
+         Xcode (26.5) builds fine, so don't fail on the mismatch. -->
+    <ValidateXcodeVersion>false</ValidateXcodeVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Skyline\Skyline.csproj" />
+    <ProjectReference Include="..\..\src\Skyline.Render\Skyline.Render.csproj" />
+    <!-- Referencing Skyline.Apple is all it takes to get the native backend;
+         the core finds it at runtime. -->
+    <ProjectReference Include="..\..\src\Skyline.Apple\Skyline.Apple.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Ships the macOS wgpu_native dylib into runtimes/. -->
+    <PackageReference Include="Silk.NET.WebGPU.Native.WGPU" />
+  </ItemGroup>
+</Project>

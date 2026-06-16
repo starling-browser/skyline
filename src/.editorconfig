@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+# Owned source carries the SPDX header (AGENTS.md). Tests and samples do not,
+# so the rule lives here under src/ rather than at the repo root.
+
+[*.cs]
+file_header_template = SPDX-License-Identifier: Apache-2.0
+dotnet_diagnostic.IDE0073.severity = warning

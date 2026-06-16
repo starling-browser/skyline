@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Skyline.Interaction.Ui</RootNamespace>
+    <!-- The overlay encodes its panel and buttons with raw wgpu. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>The composited desktop battery for the Skyline interaction tier: a GPU-free approvals core (hit-test, stack, expire) and the wgpu overlay that draws it on top of the app's pixels through the BeginClearPass = false path. The only interaction tier that touches pixels.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Skyline.Interaction.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The overlay draws on top of an app frame, so it needs the window host,
+         the WebGPU layer, and the frame-owner at once — never inside any. -->
+    <ProjectReference Include="..\Skyline.Interaction\Skyline.Interaction.csproj" />
+    <ProjectReference Include="..\Skyline\Skyline.csproj" />
+    <ProjectReference Include="..\Skyline.Gpu\Skyline.Gpu.csproj" />
+    <ProjectReference Include="..\Skyline.Render\Skyline.Render.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.WebGPU" />
+  </ItemGroup>
+</Project>

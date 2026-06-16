@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0-macos</TargetFramework>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <RootNamespace>Skyline.Apple</RootNamespace>
+    <!-- The CAMetalLayer handle handed to wgpu is pointer-shaped. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>Native AppKit windowing backend for Skyline on macOS: real window chrome, an NSWindow event pump, and a CAMetalLayer surface. Reference it from a net-macos app and Skyline uses it automatically.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- The core stays portable and never references this assembly at build
+         time; it loads this backend by name at runtime on macOS. -->
+    <ProjectReference Include="..\Skyline\Skyline.csproj" />
+  </ItemGroup>
+</Project>

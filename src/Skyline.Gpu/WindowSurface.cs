@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using Silk.NET.WebGPU;
 
 namespace Skyline.Gpu;
@@ -18,6 +20,7 @@ public sealed unsafe class WindowSurface : IDisposable
     private Texture* _texture;
     private TextureView* _view;
     private bool _disposed;
+    private long _presented;
 
     internal WindowSurface(GpuContext context, Surface* surface, WindowSurfaceOptions options)
     {
@@ -39,6 +42,13 @@ public sealed unsafe class WindowSurface : IDisposable
     /// <c>surface.PresentMode = surface.Capabilities.ChoosePresentMode(PresentMode.Mailbox)</c>.
     /// </summary>
     public PresentMode PresentMode { get; set; }
+
+    /// <summary>
+    /// How many frames this surface has successfully presented since it was created.
+    /// Only counts calls to <see cref="Present"/> that complete without error.
+    /// <see cref="CancelFrame"/> does not increment this.
+    /// </summary>
+    public long PresentCount => Interlocked.Read(ref _presented);
 
     /// <summary>
     /// What this surface supports on this adapter. One native query on
@@ -72,6 +82,16 @@ public sealed unsafe class WindowSurface : IDisposable
     /// </summary>
     public void Configure(int pixelWidth, int pixelHeight)
     {
+        // An unsupported alpha mode makes wgpu's SurfaceConfigure abort the
+        // process with a non-unwinding panic, so reject it here with a managed
+        // error first. Auto lets wgpu pick, so it is always allowed.
+        if (_options.AlphaMode != CompositeAlphaMode.Auto && !Capabilities.Supports(_options.AlphaMode))
+        {
+            throw new InvalidOperationException(
+                $"alpha mode {_options.AlphaMode} is not supported by this surface. " +
+                $"Supported: {string.Join(", ", Capabilities.AlphaModes.ToArray())}. Use Auto or a supported mode.");
+        }
+
         var w = Math.Max(1, pixelWidth);
         var h = Math.Max(1, pixelHeight);
         var config = new SurfaceConfiguration
@@ -98,16 +118,17 @@ public sealed unsafe class WindowSurface : IDisposable
     public bool TryAcquireFrame()
     {
         if (_texture != null)
+        {
             throw new InvalidOperationException("frame already acquired. Call Present or CancelFrame first.");
+        }
 
         SurfaceTexture st = default;
         _context.Api.SurfaceGetCurrentTexture(_surface, ref st);
         return HandleAcquireResult(st);
     }
 
-    // Split from TryAcquireFrame so the stale and failure paths are
-    // testable: the OS decides when a swapchain goes stale, but the
-    // handling must work whenever it does.
+    // The OS can hand back a stale or failed swapchain at any time, so
+    // handle every status here, not just success.
     internal bool HandleAcquireResult(SurfaceTexture st)
     {
         switch (st.Status)
@@ -117,9 +138,16 @@ public sealed unsafe class WindowSurface : IDisposable
             case SurfaceGetCurrentTextureStatus.Timeout:
             case SurfaceGetCurrentTextureStatus.Outdated:
             case SurfaceGetCurrentTextureStatus.Lost:
-                if (st.Texture != null) _context.Api.TextureRelease(st.Texture);
+                if (st.Texture != null)
+                {
+                    _context.Api.TextureRelease(st.Texture);
+                }
+
                 if (PixelSize is { Width: > 0, Height: > 0 })
+                {
                     Configure(PixelSize.Width, PixelSize.Height);
+                }
+
                 return false;
             default:
                 throw new InvalidOperationException($"surface acquire failed: {st.Status}");
@@ -140,8 +168,12 @@ public sealed unsafe class WindowSurface : IDisposable
     public void Present()
     {
         if (_texture == null)
+        {
             throw new InvalidOperationException("no acquired frame to present");
+        }
+
         _context.Api.SurfacePresent(_surface);
+        Interlocked.Increment(ref _presented);
         ReleaseFrame();
     }
 
@@ -150,8 +182,16 @@ public sealed unsafe class WindowSurface : IDisposable
 
     private void ReleaseFrame()
     {
-        if (_view != null) _context.Api.TextureViewRelease(_view);
-        if (_texture != null) _context.Api.TextureRelease(_texture);
+        if (_view != null)
+        {
+            _context.Api.TextureViewRelease(_view);
+        }
+
+        if (_texture != null)
+        {
+            _context.Api.TextureRelease(_texture);
+        }
+
         _view = null;
         _texture = null;
     }
@@ -161,7 +201,11 @@ public sealed unsafe class WindowSurface : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         ReleaseFrame();
         _context.Api.SurfaceRelease(_surface);

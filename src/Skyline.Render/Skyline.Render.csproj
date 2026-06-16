@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Skyline.Render</RootNamespace>
+    <!-- The frame ritual encodes passes with raw wgpu. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Description>An opinionated frame-owner for Skyline: the per-frame ritual (pace, acquire, clear, submit, present) and window wiring, on top of Skyline and Skyline.Gpu. The raw path stays one property away.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Skyline.Render.Tests" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- The frame-owner needs the window host AND the WebGPU layer at once, so
+         it sits on top of both — never inside either. -->
+    <ProjectReference Include="..\Skyline\Skyline.csproj" />
+    <ProjectReference Include="..\Skyline.Gpu\Skyline.Gpu.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Silk.NET.WebGPU" />
+  </ItemGroup>
+</Project>

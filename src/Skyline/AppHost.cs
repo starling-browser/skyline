@@ -1,6 +1,7 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using Silk.NET.GLFW;
 
 namespace Skyline;
 
@@ -29,7 +30,6 @@ public sealed class AppHost : IDisposable
         public volatile bool Stop;
     }
 
-    private readonly Glfw _glfw = Glfw.GetApi();
     private readonly List<Slot> _slots = [];
     private readonly ConcurrentQueue<Action> _invokes = new();
     private bool _running;
@@ -50,11 +50,17 @@ public sealed class AppHost : IDisposable
     public void AddWindow(AppWindow window)
     {
         if (window.Host is not null)
+        {
             throw new InvalidOperationException("window already belongs to a host");
+        }
+
         window.Host = this;
         var slot = new Slot(window);
         _slots.Add(slot);
-        if (_running) StartRenderThread(slot);
+        if (_running)
+        {
+            StartRenderThread(slot);
+        }
     }
 
     /// <summary>Queue work for the main thread and wake the loop. Callable from any thread.</summary>
@@ -65,7 +71,7 @@ public sealed class AppHost : IDisposable
     }
 
     /// <summary>Wake the event loop from any thread.</summary>
-    public void Wake() => _glfw.PostEmptyEvent();
+    public static void Wake() => WindowBackendFactory.Pump.PostEmptyEvent();
 
     /// <summary>
     /// Run until every window has closed. Blocks the calling thread, which
@@ -75,27 +81,32 @@ public sealed class AppHost : IDisposable
     {
         _running = true;
         foreach (var slot in _slots.Where(s => s.Thread is null))
+        {
             StartRenderThread(slot);
+        }
 
         try
         {
             while (_slots.Count > 0)
             {
                 // One global pump serves all windows. Poll plus a short
-                // sleep, not WaitEventsTimeout: on macOS, event bursts
-                // (window animations) overran the wait's timeout by
-                // hundreds of milliseconds and PostEmptyEvent did not
-                // interrupt it, so waiting gave Invoke unbounded latency.
-                // Polling bounds it at the sleep below.
-                _glfw.PollEvents();
+                // sleep, not WaitEventsTimeout: a blocking wait can't be
+                // reliably interrupted during event bursts, so it would give
+                // Invoke unbounded latency. Polling bounds it at the sleep
+                // below.
+                WindowBackendFactory.Pump.PollEvents();
 
                 while (_invokes.TryDequeue(out var action))
+                {
                     action();
+                }
 
                 for (var i = _slots.Count - 1; i >= 0; i--)
                 {
                     if (_slots[i].Window.IsClosing)
+                    {
                         Retire(_slots[i]);
+                    }
                 }
 
                 Thread.Sleep(2);
@@ -106,7 +117,10 @@ public sealed class AppHost : IDisposable
             // A throwing Invoke action must not leak render threads or
             // native windows: retire whatever is still open.
             for (var i = _slots.Count - 1; i >= 0; i--)
+            {
                 Retire(_slots[i]);
+            }
+
             _running = false;
         }
 
@@ -134,7 +148,9 @@ public sealed class AppHost : IDisposable
             // reconfigures its swapchain inside Resized, which must not
             // race the frame it is drawing.
             if (window.TryConsumePendingResize(out var resized))
+            {
                 window.RaiseResized(resized);
+            }
 
             if (window.IsMinimized)
             {
@@ -170,9 +186,15 @@ public sealed class AppHost : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
         for (var i = _slots.Count - 1; i >= 0; i--)
+        {
             Retire(_slots[i]);
+        }
     }
 }

@@ -8,6 +8,10 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Skyline.Tests" />
     <InternalsVisibleTo Include="Skyline.WindowedTests" />
+    <InternalsVisibleTo Include="Skyline.Apple" />
+    <!-- Skyline.Render dispatches on the WindowSurfaceSource union to build a
+         GpuContext for either backend. -->
+    <InternalsVisibleTo Include="Skyline.Render" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Silk.NET.Windowing.Common" />

@@ -3,27 +3,33 @@ using Skyline;
 using Skyline.Gpu;
 using Skyline.Input;
 
-// The proof: Skyline owns the window, loop, and input. Skyline.Gpu owns the
-// device chain, swapchain, and present mechanics. This sample owns what it
-// draws — a clear pass and a heads-up display (HUD) panel copy, encoded
-// with raw wgpu through Skyline.Gpu's escape hatches.
+// This sample draws a clear pass and a heads-up display (HUD) panel copy,
+// encoded with raw wgpu through Skyline.Gpu's escape hatches.
 //
 // Move the pointer to steer the clear color, press Space to toggle a slow
 // hue cycle, press Escape to quit. Pass --frames N to auto-close after N
 // presented frames (smoke test).
 
 if (Array.IndexOf(args, "--dump-hud") >= 0)
+{
     return HelloWindow.DumpFont.Run();
+}
 
 var maxFrames = 0;
 var argIdx = Array.IndexOf(args, "--frames");
 if (argIdx >= 0 && argIdx + 1 < args.Length)
+{
     _ = int.TryParse(args[argIdx + 1], out maxFrames);
+}
 
 // --verify-hud: on the final frame, read the rendered pixels back from the
 // GPU and assert the HUD panel is actually in the presented image.
 var verifyHud = Array.IndexOf(args, "--verify-hud") >= 0;
-if (verifyHud && maxFrames <= 0) maxFrames = 30;
+if (verifyHud && maxFrames <= 0)
+{
+    maxFrames = 30;
+}
+
 string? verifyReport = null;
 
 using var win = new AppWindow(new AppWindowOptions { Title = "Skyline — hello window", Width = 800, Height = 600 });
@@ -49,7 +55,11 @@ win.Resized += f =>
 
 win.PointerInput += e =>
 {
-    if (e.Kind != PointerEventKind.Move) return;
+    if (e.Kind != PointerEventKind.Move)
+    {
+        return;
+    }
+
     var f = win.CurrentFrame;
     pointerX = Math.Clamp(e.X / Math.Max(1f, f.LogicalWidth), 0f, 1f);
     pointerY = Math.Clamp(e.Y / Math.Max(1f, f.LogicalHeight), 0f, 1f);
@@ -58,8 +68,16 @@ win.PointerInput += e =>
 
 win.KeyInput += e =>
 {
-    if (!e.IsDown) return;
-    if (e.Key == Key.Escape) win.RequestClose();
+    if (!e.IsDown)
+    {
+        return;
+    }
+
+    if (e.Key == Key.Escape)
+    {
+        win.RequestClose();
+    }
+
     if (e.Key == Key.Space) { animate = !animate; dirtyFrames = Math.Max(dirtyFrames, 3); }
 };
 
@@ -69,7 +87,11 @@ win.IsDirty = () => maxFrames > 0 || animate || dirtyFrames > 0;
 
 win.RenderFrame += f =>
 {
-    if (animate) hue = (hue + (float)f.DeltaSeconds * 0.2f) % 1f;
+    if (animate)
+    {
+        hue = (hue + (float)f.DeltaSeconds * 0.2f) % 1f;
+    }
+
     var r = pointerX;
     var g = (hue + pointerY * 0.5f) % 1f;
     var b = 0.45f;
@@ -79,11 +101,26 @@ win.RenderFrame += f =>
         $"R {r:0.00}   G {g:0.00}   B {b:0.00}   HUE {hue:0.00}",
     ];
     var isLast = maxFrames > 0 && presented == maxFrames - 1;
-    if (!gpu.RenderClear(r, g, b, hud, f.Dpr, readbackHud: verifyHud && isLast)) return; // stay dirty and retry next frame
-    if (verifyHud && isLast) verifyReport = gpu.LastVerifyReport;
-    if (dirtyFrames > 0) dirtyFrames--;
+    if (!gpu.RenderClear(r, g, b, hud, f.Dpr, readbackHud: verifyHud && isLast))
+    {
+        return; // stay dirty and retry next frame
+    }
+
+    if (verifyHud && isLast)
+    {
+        verifyReport = gpu.LastVerifyReport;
+    }
+
+    if (dirtyFrames > 0)
+    {
+        dirtyFrames--;
+    }
+
     presented++;
-    if (maxFrames > 0 && presented >= maxFrames) win.RequestClose();
+    if (maxFrames > 0 && presented >= maxFrames)
+    {
+        win.RequestClose();
+    }
 };
 
 var code = win.Run();
@@ -91,7 +128,10 @@ Console.WriteLine($"HELLO OK: presented {presented} frames via Skyline window + 
 if (verifyHud)
 {
     Console.WriteLine(verifyReport ?? "HUD VERIFY FAILED: no readback ran");
-    if (verifyReport?.StartsWith("HUD VERIFY OK") != true) return 1;
+    if (verifyReport?.StartsWith("HUD VERIFY OK") != true)
+    {
+        return 1;
+    }
 }
 return presented > 0 ? code : 1;
 
@@ -139,9 +179,7 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
     // only when the text changes. Every frame then copies texture→texture
     // inside the same command submission as the clear pass. Folding the
     // copy into the submitted encoder is what guarantees the HUD lands on
-    // the frame being presented — a bare QueueWriteTexture is allowed to
-    // execute with the NEXT submit, which made the last frame before the
-    // app went idle (the one that stays on screen) lose its overlay.
+    // the frame being presented, not on the next submit.
     private string? _hudKey;
     private Texture* _hudTexture;
     private (int W, int H) _hudSize;
@@ -154,7 +192,9 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         _pacer.Wait(); // keep the CPU at most one frame ahead of the GPU
 
         if (!_surface.TryAcquireFrame())
+        {
             return false; // swapchain stale; Skyline.Gpu reconfigured, retry next frame
+        }
 
         EnsureHudTexture(hudLines, dpr);
 
@@ -210,10 +250,15 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         // Text probe: count near-white pixels across the panel area.
         var textPixels = 0;
         for (var y = margin; y < Math.Min(margin + _hudSize.H, h); y++)
-        for (var x = margin; x < Math.Min(margin + _hudSize.W, w); x++)
         {
-            var o = (y * w + x) * 4;
-            if (pixels[o] > 200 && pixels[o + 1] > 200 && pixels[o + 2] > 200) textPixels++;
+            for (var x = margin; x < Math.Min(margin + _hudSize.W, w); x++)
+            {
+                var o = (y * w + x) * 4;
+                if (pixels[o] > 200 && pixels[o + 1] > 200 && pixels[o + 2] > 200)
+                {
+                    textPixels++;
+                }
+            }
         }
 
         return bgOk && textPixels > 100
@@ -225,14 +270,21 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
     {
         var key = string.Join('\n', lines) + "@" + dpr;
         if (key == _hudKey && _hudTexture != null)
+        {
             return;
+        }
+
         _hudKey = key;
 
         var wgpu = _gpu.Api;
         var (w, h, px) = HelloWindow.TextOverlay.Render(lines, (int)MathF.Round(2 * dpr));
         if (_hudTexture == null || _hudSize != (w, h))
         {
-            if (_hudTexture != null) wgpu.TextureRelease(_hudTexture);
+            if (_hudTexture != null)
+            {
+                wgpu.TextureRelease(_hudTexture);
+            }
+
             var desc = new TextureDescriptor
             {
                 Dimension = TextureDimension.Dimension2D,
@@ -252,17 +304,24 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
         // This write is ordered before any later QueueSubmit, so the copy
         // encoded below always reads the up-to-date panel.
         fixed (byte* p = px)
+        {
             wgpu.QueueWriteTexture(_gpu.QueueHandle, in dst, p, (nuint)px.Length, in layout, in extent);
+        }
     }
 
     private void EncodeHudCopy(CommandEncoder* enc, Texture* surfaceTexture, float dpr)
     {
         if (_hudTexture == null)
+        {
             return;
+        }
+
         var (sw, sh) = _surface.PixelSize;
         var margin = (int)MathF.Round(16 * dpr);
         if (margin + _hudSize.W > sw || margin + _hudSize.H > sh)
+        {
             return; // window too small for the panel, so skip rather than clip
+        }
 
         var src = new ImageCopyTexture { Texture = _hudTexture, MipLevel = 0, Origin = default, Aspect = TextureAspect.All };
         var dst = new ImageCopyTexture
@@ -279,7 +338,11 @@ internal sealed unsafe class WgpuClearRenderer : IDisposable
     public void Dispose()
     {
         _pacer.Dispose(); // drains in-flight frames before teardown
-        if (_hudTexture != null) _gpu.Api.TextureRelease(_hudTexture);
+        if (_hudTexture != null)
+        {
+            _gpu.Api.TextureRelease(_hudTexture);
+        }
+
         _gpu.Dispose(); // disposes the surface too
     }
 }

@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: Apache-2.0
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+[*.{json,yml,yaml,csproj,props,targets,slnx}]
+indent_size = 2
+
+[*.cs]
+# --- AGENTS.md hard rules (warnings: dotnet format fixes them, build flags them) ---
+# Braces always, even for single-line bodies.
+csharp_prefer_braces = true:warning
+# File-scoped namespaces, matching the existing codebase.
+csharp_style_namespace_declarations = file_scoped:warning
+
+# --- Layout (the existing style: Allman braces, sorted usings) ---
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+# Private-field naming is intentionally not enforced: the codebase mixes
+# `_field` and `field`, so there is no single convention to gate on.

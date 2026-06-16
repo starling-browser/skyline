@@ -58,8 +58,7 @@ public class InputTests
     [TestMethod]
     public void MapKeyReportsUnknownForUnmappedCodes()
     {
-        // Silk's enum has entries Skyline's does not. They report Unknown
-        // and round-trip through KeyEvent.Code instead.
+        // An unmapped key code maps to Unknown.
         Assert.AreEqual(Key.Unknown, AppWindow.MapKey((Silk.NET.Input.Key)12345));
     }
 }

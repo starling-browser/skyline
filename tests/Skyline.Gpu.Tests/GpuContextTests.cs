@@ -54,7 +54,11 @@ public unsafe class GpuContextTests
             Usage = TextureUsage.RenderAttachment,
         };
         var tex = gpu.Api.DeviceCreateTexture(gpu.DeviceHandle, in desc);
-        if (tex != null) gpu.Api.TextureRelease(tex);
+        if (tex != null)
+        {
+            gpu.Api.TextureRelease(tex);
+        }
+
         gpu.Poll(wait: false);
 
         Assert.IsTrue(fired, "invalid texture creation should raise an uncaptured error");
@@ -64,9 +68,7 @@ public unsafe class GpuContextTests
     [TestMethod]
     public void DeviceLostHandlerCanBeRegistered()
     {
-        // wgpu-native only fires the lost callback for real device loss,
-        // not for an orderly Dispose — so this asserts registration and
-        // teardown are safe, not that the event fires.
+        // Registration and teardown are safe even when the event never fires.
         var gpu = GpuContext.CreateHeadless();
         gpu.DeviceLost += (_, _) => { };
         gpu.Dispose();
