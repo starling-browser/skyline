@@ -68,19 +68,19 @@ internal sealed class MetalView : NSView
     private void Move(NSEvent e)
     {
         var (x, y) = Local(e);
-        Pointer?.Invoke(new PointerEvent(PointerEventKind.Move, x, y, -1, 0, 0));
+        Pointer?.Invoke(new PointerEvent(PointerEventKind.Move, x, y, -1, 0, 0, AppleModifierMap.Map(e.ModifierFlags)));
     }
 
     private void Down(NSEvent e, int button)
     {
         var (x, y) = Local(e);
-        Pointer?.Invoke(new PointerEvent(PointerEventKind.Down, x, y, button, 0, 0));
+        Pointer?.Invoke(new PointerEvent(PointerEventKind.Down, x, y, button, 0, 0, AppleModifierMap.Map(e.ModifierFlags)));
     }
 
     private void Up(NSEvent e, int button)
     {
         var (x, y) = Local(e);
-        Pointer?.Invoke(new PointerEvent(PointerEventKind.Up, x, y, button, 0, 0));
+        Pointer?.Invoke(new PointerEvent(PointerEventKind.Up, x, y, button, 0, 0, AppleModifierMap.Map(e.ModifierFlags)));
     }
 
     public override void MouseMoved(NSEvent theEvent) => Move(theEvent);
@@ -99,24 +99,25 @@ internal sealed class MetalView : NSView
     {
         var (x, y) = Local(theEvent);
         Pointer?.Invoke(new PointerEvent(
-            PointerEventKind.Wheel, x, y, -1, (float)theEvent.ScrollingDeltaX, (float)theEvent.ScrollingDeltaY));
+            PointerEventKind.Wheel, x, y, -1, (float)theEvent.ScrollingDeltaX, (float)theEvent.ScrollingDeltaY,
+            AppleModifierMap.Map(theEvent.ModifierFlags)));
     }
 
     // KeyEvent.Code is the GLFW-space keycode by contract; Skyline's Key enum
     // mirrors it, so a known key reports (int)key to match the GLFW backend. An
     // unmapped key keeps its distinct raw macOS code instead of collapsing every
     // unmapped key onto Key.Unknown's -1.
-    private static KeyEvent ToKeyEvent(bool isDown, ushort macKeyCode)
+    private static KeyEvent ToKeyEvent(bool isDown, ushort macKeyCode, ModifierKeys modifiers)
     {
         // Qualify the enum: the instance event is also named Key.
         var key = AppleKeyMap.Map(macKeyCode);
         var code = key != Input.Key.Unknown ? (int)key : macKeyCode;
-        return new KeyEvent(isDown, key, code);
+        return new KeyEvent(isDown, key, code, modifiers);
     }
 
     public override void KeyDown(NSEvent theEvent)
     {
-        Key?.Invoke(ToKeyEvent(true, theEvent.KeyCode));
+        Key?.Invoke(ToKeyEvent(true, theEvent.KeyCode, AppleModifierMap.Map(theEvent.ModifierFlags)));
         var chars = theEvent.Characters;
         if (!string.IsNullOrEmpty(chars))
         {
@@ -132,5 +133,5 @@ internal sealed class MetalView : NSView
         }
     }
 
-    public override void KeyUp(NSEvent theEvent) => Key?.Invoke(ToKeyEvent(false, theEvent.KeyCode));
+    public override void KeyUp(NSEvent theEvent) => Key?.Invoke(ToKeyEvent(false, theEvent.KeyCode, AppleModifierMap.Map(theEvent.ModifierFlags)));
 }

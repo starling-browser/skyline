@@ -77,10 +77,16 @@ win.KeyInput += e => key = e;
 win.TextInput += e => text = e;
 
 win.RaisePointer(PointerEventKind.Down, 10f, 20f, 0, 0, 0);
-Check(pointer is { Kind: PointerEventKind.Down, X: 10f, Y: 20f, Button: 0 }, "RaisePointer reaches PointerInput");
+Check(pointer is { Kind: PointerEventKind.Down, X: 10f, Y: 20f, Button: 0, Modifiers: ModifierKeys.None }, "RaisePointer reaches PointerInput");
+
+win.RaisePointer(PointerEventKind.Down, 10f, 20f, 0, 0, 0, ModifierKeys.Cmd | ModifierKeys.Shift);
+Check(pointer is { Modifiers: ModifierKeys.Cmd | ModifierKeys.Shift }, "RaisePointer carries modifiers to PointerInput");
 
 win.RaiseKey(true, Silk.NET.Input.Key.Escape);
-Check(key is { IsDown: true, Key: Key.Escape, Code: 256 }, "RaiseKey maps and reaches KeyInput");
+Check(key is { IsDown: true, Key: Key.Escape, Code: 256, Modifiers: ModifierKeys.None }, "RaiseKey maps and reaches KeyInput");
+
+win.RaiseKey(true, Silk.NET.Input.Key.Escape, ModifierKeys.Ctrl);
+Check(key is { Modifiers: ModifierKeys.Ctrl }, "RaiseKey carries modifiers to KeyInput");
 
 win.RaiseKey(false, (Silk.NET.Input.Key)12345);
 Check(key is { IsDown: false, Key: Key.Unknown, Code: 12345 }, "unmapped key reports Unknown but keeps the code");

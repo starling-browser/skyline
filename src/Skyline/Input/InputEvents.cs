@@ -13,7 +13,8 @@ public enum PointerEventKind
 /// <summary>
 /// One pointer event. Coordinates are logical pixels relative to the
 /// window's content area. <see cref="Button"/> is 0 = left, 1 = right,
-/// 2 = middle (meaningful for Down/Up only).
+/// 2 = middle (meaningful for Down/Up only). <see cref="Modifiers"/> are the
+/// keyboard modifiers held when the event fired.
 /// </summary>
 public readonly record struct PointerEvent(
     PointerEventKind Kind,
@@ -21,14 +22,16 @@ public readonly record struct PointerEvent(
     float Y,
     int Button,
     float WheelDx,
-    float WheelDy);
+    float WheelDy,
+    ModifierKeys Modifiers = ModifierKeys.None);
 
 /// <summary>
 /// One key transition. <see cref="Key"/> covers the common keys.
 /// <see cref="Code"/> is the raw GLFW keycode for everything else.
-/// Printable text arrives separately via <see cref="TextEvent"/>.
+/// <see cref="Modifiers"/> are the keyboard modifiers held when the event
+/// fired. Printable text arrives separately via <see cref="TextEvent"/>.
 /// </summary>
-public readonly record struct KeyEvent(bool IsDown, Key Key, int Code);
+public readonly record struct KeyEvent(bool IsDown, Key Key, int Code, ModifierKeys Modifiers = ModifierKeys.None);
 
 /// <summary>
 /// A committed text character — what the user typed, after keyboard layout

@@ -61,4 +61,48 @@ public class InputTests
         // An unmapped key code maps to Unknown.
         Assert.AreEqual(Key.Unknown, AppWindow.MapKey((Silk.NET.Input.Key)12345));
     }
+
+    [TestMethod]
+    public void EventsDefaultToNoModifiers()
+    {
+        Assert.AreEqual(ModifierKeys.None, new PointerEvent(PointerEventKind.Move, 0, 0, -1, 0, 0).Modifiers);
+        Assert.AreEqual(ModifierKeys.None, new KeyEvent(true, Key.A, 65).Modifiers);
+    }
+
+    [TestMethod]
+    public void EventsCarryModifiers()
+    {
+        var mods = ModifierKeys.Cmd | ModifierKeys.Shift;
+        Assert.AreEqual(mods, new PointerEvent(PointerEventKind.Down, 1, 2, 0, 0, 0, mods).Modifiers);
+        Assert.AreEqual(mods, new KeyEvent(true, Key.A, 65, mods).Modifiers);
+    }
+
+    [TestMethod]
+    public void ModifierKeysMapReportsNoneWhenNothingPressed()
+    {
+        Assert.AreEqual(ModifierKeys.None, ModifierKeysMap.FromPressed(_ => false));
+    }
+
+    [TestMethod]
+    public void ModifierKeysMapReportsEveryFlagWhenAllPressed()
+    {
+        Assert.AreEqual(
+            ModifierKeys.Shift | ModifierKeys.Ctrl | ModifierKeys.Alt | ModifierKeys.Cmd | ModifierKeys.CapsLock,
+            ModifierKeysMap.FromPressed(_ => true));
+    }
+
+    [DataTestMethod]
+    [DataRow(Silk.NET.Input.Key.ShiftLeft, ModifierKeys.Shift)]
+    [DataRow(Silk.NET.Input.Key.ShiftRight, ModifierKeys.Shift)]
+    [DataRow(Silk.NET.Input.Key.ControlLeft, ModifierKeys.Ctrl)]
+    [DataRow(Silk.NET.Input.Key.ControlRight, ModifierKeys.Ctrl)]
+    [DataRow(Silk.NET.Input.Key.AltLeft, ModifierKeys.Alt)]
+    [DataRow(Silk.NET.Input.Key.AltRight, ModifierKeys.Alt)]
+    [DataRow(Silk.NET.Input.Key.SuperLeft, ModifierKeys.Cmd)]
+    [DataRow(Silk.NET.Input.Key.SuperRight, ModifierKeys.Cmd)]
+    [DataRow(Silk.NET.Input.Key.CapsLock, ModifierKeys.CapsLock)]
+    public void ModifierKeysMapMapsEachKeyToItsFlag(Silk.NET.Input.Key pressed, ModifierKeys expected)
+    {
+        Assert.AreEqual(expected, ModifierKeysMap.FromPressed(k => k == pressed));
+    }
 }
