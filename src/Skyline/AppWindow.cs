@@ -99,11 +99,11 @@ public sealed class AppWindow : IDisposable
         _backend.Text += e => TextInput?.Invoke(e);
     }
 
-    internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
-        PointerInput?.Invoke(new PointerEvent(kind, x, y, button, wheelDx, wheelDy));
+    internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy, ModifierKeys modifiers = ModifierKeys.None) =>
+        PointerInput?.Invoke(new PointerEvent(kind, x, y, button, wheelDx, wheelDy, modifiers));
 
-    internal void RaiseKey(bool isDown, Silk.NET.Input.Key key) =>
-        KeyInput?.Invoke(new KeyEvent(isDown, MapKey(key), (int)key));
+    internal void RaiseKey(bool isDown, Silk.NET.Input.Key key, ModifierKeys modifiers = ModifierKeys.None) =>
+        KeyInput?.Invoke(new KeyEvent(isDown, MapKey(key), (int)key, modifiers));
 
     internal void RaiseText(char character) =>
         TextInput?.Invoke(new TextEvent(character));

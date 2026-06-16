@@ -19,6 +19,7 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     private readonly Glfw _glfw;
     private readonly unsafe WindowHandle* _glfwHandle;
     private readonly WindowSurfaceSource _surfaceSource;
+    private readonly Func<Silk.NET.Input.Key, bool> _pressed;
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
@@ -54,17 +55,20 @@ internal sealed class GlfwWindowBackend : IWindowBackend
         _window.Render += delta => Render?.Invoke(delta);
 
         _input = _window.CreateInput();
+        // GLFW callbacks carry no modifier field, so sample the live keyboard
+        // state at event time. ModifierKeysMap maps it to the platform-neutral set.
+        _pressed = k => _input.Keyboards.Any(kb => kb.IsKeyPressed(k));
         foreach (var mouse in _input.Mice)
         {
-            mouse.MouseMove += (_, pos) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0));
-            mouse.MouseDown += (m, btn) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.MouseUp += (m, btn) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0));
-            mouse.Scroll += (m, wheel) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y));
+            mouse.MouseMove += (_, pos) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Move, pos.X, pos.Y, -1, 0, 0, ModifierKeysMap.FromPressed(_pressed)));
+            mouse.MouseDown += (m, btn) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Down, m.Position.X, m.Position.Y, (int)btn, 0, 0, ModifierKeysMap.FromPressed(_pressed)));
+            mouse.MouseUp += (m, btn) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Up, m.Position.X, m.Position.Y, (int)btn, 0, 0, ModifierKeysMap.FromPressed(_pressed)));
+            mouse.Scroll += (m, wheel) => Pointer?.Invoke(new PointerEvent(PointerEventKind.Wheel, m.Position.X, m.Position.Y, -1, wheel.X, wheel.Y, ModifierKeysMap.FromPressed(_pressed)));
         }
         foreach (var keyboard in _input.Keyboards)
         {
-            keyboard.KeyDown += (_, k, _) => Key?.Invoke(new KeyEvent(true, AppWindow.MapKey(k), (int)k));
-            keyboard.KeyUp += (_, k, _) => Key?.Invoke(new KeyEvent(false, AppWindow.MapKey(k), (int)k));
+            keyboard.KeyDown += (_, k, _) => Key?.Invoke(new KeyEvent(true, AppWindow.MapKey(k), (int)k, ModifierKeysMap.FromPressed(_pressed)));
+            keyboard.KeyUp += (_, k, _) => Key?.Invoke(new KeyEvent(false, AppWindow.MapKey(k), (int)k, ModifierKeysMap.FromPressed(_pressed)));
             keyboard.KeyChar += (_, ch) => Text?.Invoke(new TextEvent(ch));
         }
     }
