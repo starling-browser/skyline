@@ -17,6 +17,9 @@ internal interface IWindowBackend : IDisposable
     /// <summary>Window size in logical points.</summary>
     (int Width, int Height) LogicalSize { get; }
 
+    /// <summary>The display's refresh rate in Hz, for pacing animation.</summary>
+    double RefreshRate { get; }
+
     string Title { get; set; }
     string? ClipboardText { get; set; }
 

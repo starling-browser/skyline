@@ -112,6 +112,8 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         }
     }
 
+    public double RefreshRate => (_window.Screen ?? NSScreen.MainScreen)?.MaximumFramesPerSecond ?? 60;
+
     public string Title
     {
         get => _window.Title;

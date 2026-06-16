@@ -14,6 +14,7 @@ public class WindowBackendFactoryTests
     {
         public (int Width, int Height) FramebufferSize => (200, 100);
         public (int Width, int Height) LogicalSize => (100, 50);
+        public double RefreshRate => 60;
         public string Title { get; set; } = "fake";
         public string? ClipboardText { get; set; }
         public bool IsClosing => false;
