@@ -127,6 +127,28 @@ using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfa
         Check(alphaOkGpu.Surface.PixelSize.Width > 0, "Configure accepts a supported alpha mode");
     }
 
+    // Surface format selection: report support, choose with a fallback, and
+    // reject an unsupported format with a managed error instead of a wgpu abort.
+    Check(caps.Supports(surface.Format), "the configured surface format is supported");
+    var chosenFormat = caps.ChooseFormat(TextureFormat.Rgba16float, caps.Formats[0]);
+    Check(caps.Supports(chosenFormat), "ChooseFormat returns a supported format");
+    Check(caps.ChooseFormat((TextureFormat)0x6FFFFFFF) == caps.Formats[0], "ChooseFormat falls back to the preferred format");
+
+    var unsupportedFormat = TextureFormat.R8Unorm;
+    var foundUnsupportedFormat = false;
+    foreach (var f in new[] { TextureFormat.R8Unorm, TextureFormat.RG8Unorm, TextureFormat.R16float, TextureFormat.R32float })
+    {
+        if (!caps.Supports(f)) { unsupportedFormat = f; foundUnsupportedFormat = true; break; }
+    }
+    Check(foundUnsupportedFormat && !caps.Supports(unsupportedFormat), "the surface rejects at least one single-channel format");
+    using (var fmtGpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfaceOptions { Format = unsupportedFormat }))
+    {
+        var fmtThrew = false;
+        try { fmtGpu.Surface!.Configure(frame.PixelWidth, frame.PixelHeight); }
+        catch (InvalidOperationException) { fmtThrew = true; }
+        Check(fmtThrew, "Configure throws on an unsupported format");
+    }
+
     surface.PresentMode = caps.ChoosePresentMode(PresentMode.Fifo);
     Check(surface.PresentMode == PresentMode.Fifo, "PresentMode property holds the choice");
     Check(surface.Format == TextureFormat.Bgra8Unorm, "Format reflects options");

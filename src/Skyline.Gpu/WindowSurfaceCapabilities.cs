@@ -29,6 +29,19 @@ public sealed class WindowSurfaceCapabilities
 
     public ReadOnlySpan<CompositeAlphaMode> AlphaModes => _alphaModes;
 
+    public bool Supports(TextureFormat format)
+    {
+        foreach (var f in _formats)
+        {
+            if (f == format)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public bool Supports(PresentMode mode)
     {
         // At most four entries — a scan beats any lookup structure.
@@ -71,5 +84,25 @@ public sealed class WindowSurfaceCapabilities
         }
 
         return PresentMode.Fifo;
+    }
+
+    /// <summary>
+    /// The first of <paramref name="preferred"/> this surface supports, or the
+    /// surface's own preferred format (<see cref="Formats"/>[0]) when none
+    /// match. Use it to ask for a wide-gamut or high-dynamic-range format —
+    /// such as Rgba16Float — with a safe fallback, then pass the result as
+    /// <see cref="WindowSurfaceOptions.Format"/>.
+    /// </summary>
+    public TextureFormat ChooseFormat(params ReadOnlySpan<TextureFormat> preferred)
+    {
+        foreach (var format in preferred)
+        {
+            if (Supports(format))
+            {
+                return format;
+            }
+        }
+
+        return _formats[0];
     }
 }

@@ -92,6 +92,16 @@ public sealed unsafe class WindowSurface : IDisposable
                 $"Supported: {string.Join(", ", Capabilities.AlphaModes.ToArray())}. Use Auto or a supported mode.");
         }
 
+        // An unsupported format aborts wgpu the same way, so reject a
+        // wide-gamut or HDR format the surface cannot present with a managed
+        // error. Pick one safely with Capabilities.ChooseFormat.
+        if (!Capabilities.Supports(_options.Format))
+        {
+            throw new InvalidOperationException(
+                $"surface format {_options.Format} is not supported by this surface. " +
+                $"Supported: {string.Join(", ", Capabilities.Formats.ToArray())}. Use Capabilities.ChooseFormat(...).");
+        }
+
         var w = Math.Max(1, pixelWidth);
         var h = Math.Max(1, pixelHeight);
         var config = new SurfaceConfiguration
