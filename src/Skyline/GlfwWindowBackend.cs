@@ -104,6 +104,15 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
     public void Restore() => _window.WindowState = WindowState.Normal;
 
+    public void SetCursor(Skyline.Input.CursorShape shape)
+    {
+        var standard = CursorShapeMap.ToStandardCursor(shape);
+        foreach (var mouse in _input.Mice)
+        {
+            mouse.Cursor.StandardCursor = standard;
+        }
+    }
+
     public void Dispose()
     {
         _input.Dispose();

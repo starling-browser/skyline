@@ -48,6 +48,9 @@ internal interface IWindowBackend : IDisposable
     void Resize(int width, int height);
     void Minimize();
     void Restore();
+
+    /// <summary>Set the OS cursor shown over the window's content.</summary>
+    void SetCursor(CursorShape shape);
 }
 
 /// <summary>

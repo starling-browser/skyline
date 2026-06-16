@@ -29,6 +29,13 @@ internal sealed class MetalView : NSView
 
     internal CAMetalLayer MetalLayer => (CAMetalLayer)Layer!;
 
+    /// <summary>The cursor drawn over this view. AppKit asks for it through
+    /// <see cref="ResetCursorRects"/>; the backend invalidates the rects when it
+    /// changes.</summary>
+    internal NSCursor CurrentCursor { get; set; } = NSCursor.ArrowCursor;
+
+    public override void ResetCursorRects() => AddCursorRect(Bounds, CurrentCursor);
+
     public override CALayer MakeBackingLayer() => new CAMetalLayer();
 
     public override bool AcceptsFirstResponder() => true;

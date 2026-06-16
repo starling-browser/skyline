@@ -83,6 +83,14 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         _window.MakeKeyAndOrderFront(null);
     }
 
+    public void SetCursor(CursorShape shape)
+    {
+        _view.CurrentCursor = AppleCursorMap.ToNsCursor(shape);
+        // Rebuild the view's cursor rects so AppKit adopts the new cursor on
+        // the next mouse move.
+        _window.InvalidateCursorRectsForView(_view);
+    }
+
     private float Scale => (float)_window.BackingScaleFactor;
 
     private void UpdateDrawableSize()

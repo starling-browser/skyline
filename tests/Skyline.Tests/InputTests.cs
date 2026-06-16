@@ -105,4 +105,32 @@ public class InputTests
     {
         Assert.AreEqual(expected, ModifierKeysMap.FromPressed(k => k == pressed));
     }
+
+    [DataTestMethod]
+    [DataRow(CursorShape.Default, Silk.NET.Input.StandardCursor.Default)]
+    [DataRow(CursorShape.Pointer, Silk.NET.Input.StandardCursor.Hand)]
+    [DataRow(CursorShape.Text, Silk.NET.Input.StandardCursor.IBeam)]
+    [DataRow(CursorShape.Crosshair, Silk.NET.Input.StandardCursor.Crosshair)]
+    [DataRow(CursorShape.Move, Silk.NET.Input.StandardCursor.ResizeAll)]
+    [DataRow(CursorShape.Wait, Silk.NET.Input.StandardCursor.Default)]
+    [DataRow(CursorShape.Progress, Silk.NET.Input.StandardCursor.Default)]
+    [DataRow(CursorShape.NotAllowed, Silk.NET.Input.StandardCursor.NotAllowed)]
+    [DataRow(CursorShape.Grab, Silk.NET.Input.StandardCursor.Hand)]
+    [DataRow(CursorShape.Grabbing, Silk.NET.Input.StandardCursor.Hand)]
+    [DataRow(CursorShape.ResizeEw, Silk.NET.Input.StandardCursor.HResize)]
+    [DataRow(CursorShape.ResizeNs, Silk.NET.Input.StandardCursor.VResize)]
+    [DataRow(CursorShape.ResizeNwse, Silk.NET.Input.StandardCursor.NwseResize)]
+    [DataRow(CursorShape.ResizeNesw, Silk.NET.Input.StandardCursor.NeswResize)]
+    [DataRow(CursorShape.ResizeAll, Silk.NET.Input.StandardCursor.ResizeAll)]
+    public void CursorShapeMapsToStandardCursor(CursorShape shape, Silk.NET.Input.StandardCursor expected)
+    {
+        Assert.AreEqual(expected, CursorShapeMap.ToStandardCursor(shape));
+    }
+
+    [TestMethod]
+    public void CursorShapeMapFallsBackToDefault()
+    {
+        // An out-of-range shape falls back to the default arrow.
+        Assert.AreEqual(Silk.NET.Input.StandardCursor.Default, CursorShapeMap.ToStandardCursor((CursorShape)999));
+    }
 }
