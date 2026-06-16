@@ -67,6 +67,18 @@ win.PumpEvents();
 Check(soloResized, "Resize fires Resized in single-window mode");
 frame = win.CurrentFrame;
 
+// --- Window position and bounds on the GLFW backend --------------------
+
+using (var posWin = new AppWindow(new AppWindowOptions { Title = "pos", Width = 160, Height = 120, ForceGlfw = true }))
+{
+    posWin.Position = (140, 110);
+    posWin.PumpEvents();
+    var p = posWin.Position;
+    Check(p.X >= 0 && p.Y >= 0, "Position get/set round-trips on the GLFW backend");
+    var bounds = posWin.Bounds;
+    Check(bounds is { Width: > 0, Height: > 0 } && (bounds.X, bounds.Y) == p, "Bounds reports position plus logical size");
+}
+
 // --- Input raising (the seam below GLFW callbacks) ---------------------
 
 PointerEvent? pointer = null;

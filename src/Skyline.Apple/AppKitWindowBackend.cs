@@ -28,6 +28,7 @@ internal sealed class AppKitWindowBackend : IWindowBackend
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
+    public event Action<(int X, int Y)>? Moved;
     public event Action<double>? Render;
     public event Action<PointerEvent>? Pointer;
     public event Action<KeyEvent>? Key;
@@ -154,6 +155,24 @@ internal sealed class AppKitWindowBackend : IWindowBackend
 
     public void Resize(int width, int height) => _window.SetContentSize(new CGSize(width, height));
 
+    // Skyline reports a top-left origin (like GLFW); AppKit's frame is
+    // bottom-left, so flip against the window's screen height.
+    public (int X, int Y) Position
+    {
+        get
+        {
+            var f = _window.Frame;
+            var screenHeight = (_window.Screen ?? NSScreen.MainScreen)?.Frame.Height ?? f.Height;
+            return ((int)f.X, (int)(screenHeight - f.Y - f.Height));
+        }
+        set
+        {
+            var frame = _window.Frame;
+            var screenHeight = (_window.Screen ?? NSScreen.MainScreen)?.Frame.Height ?? frame.Height;
+            _window.SetFrameOrigin(new CGPoint(value.X, screenHeight - value.Y - frame.Height));
+        }
+    }
+
     public void Minimize() => _window.Miniaturize(null);
 
     public void Restore() => _window.Deminiaturize(null);
@@ -161,6 +180,8 @@ internal sealed class AppKitWindowBackend : IWindowBackend
     internal void OnClosing() => _closing = true;
 
     internal void OnMinimizedChanged(bool minimized) => MinimizedChanged?.Invoke(minimized);
+
+    internal void OnMoved() => Moved?.Invoke(Position);
 
     public void Dispose()
     {
@@ -181,5 +202,7 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         public override void DidMiniaturize(NSNotification notification) => backend.OnMinimizedChanged(true);
 
         public override void DidDeminiaturize(NSNotification notification) => backend.OnMinimizedChanged(false);
+
+        public override void DidMove(NSNotification notification) => backend.OnMoved();
     }
 }

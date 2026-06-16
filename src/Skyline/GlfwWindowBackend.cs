@@ -23,6 +23,7 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
+    public event Action<(int X, int Y)>? Moved;
     public event Action<double>? Render;
     public event Action<PointerEvent>? Pointer;
     public event Action<KeyEvent>? Key;
@@ -52,6 +53,7 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
         _window.FramebufferResize += sz => FramebufferResized?.Invoke((sz.X, sz.Y));
         _window.StateChanged += state => MinimizedChanged?.Invoke(state == WindowState.Minimized);
+        _window.Move += pos => Moved?.Invoke((pos.X, pos.Y));
         _window.Render += delta => Render?.Invoke(delta);
 
         _input = _window.CreateInput();
@@ -75,6 +77,12 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
     public (int Width, int Height) FramebufferSize => (_window.FramebufferSize.X, _window.FramebufferSize.Y);
     public (int Width, int Height) LogicalSize => (_window.Size.X, _window.Size.Y);
+
+    public (int X, int Y) Position
+    {
+        get => (_window.Position.X, _window.Position.Y);
+        set => _window.Position = new Vector2D<int>(value.X, value.Y);
+    }
 
     public string Title
     {
