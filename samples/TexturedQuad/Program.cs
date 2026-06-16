@@ -6,16 +6,16 @@ using Skyline.Input;
 using Skyline.Render;
 using WgpuBuffer = Silk.NET.WebGPU.Buffer;
 
-// A full-screen GPU visualization on top of Skyline's FrameLoop: the Milky Way,
-// seen as a tilted spiral disk. One fragment shader draws a glowing core bulge,
-// two logarithmic spiral arms studded with blue star clusters and pink nebulae,
-// dark dust lanes, and a field of background stars, all turning slowly. No vertex
-// buffer and no texture — a full-screen triangle from the vertex index feeds the
-// shader, and a small uniform buffer carries resolution, time, and the mouse.
+// A full-screen GPU visualization on top of Skyline's FrameLoop: a spiral galaxy,
+// seen as a tilted disk. One fragment shader draws a blazing white core with a
+// vertical light shaft, purple nebulosity, and spiral arms swirled out of dense
+// white-lavender stars over a black, star-flecked sky, all turning slowly. No
+// vertex buffer and no texture — a full-screen triangle from the vertex index
+// feeds the shader, and a small uniform buffer carries resolution and time.
 //
 // Everything moves at a crawl on purpose: a slow turn reads as calm and never
-// flashes. Move the mouse to tilt the view, Space pauses, Escape quits. Pass
-// --frames N to auto-close after N presented frames (smoke test).
+// flashes. Space pauses, Escape quits. Pass --frames N to auto-close after N
+// presented frames (smoke test).
 
 var maxFrames = 0;
 var argIdx = Array.IndexOf(args, "--frames");
@@ -50,14 +50,6 @@ win.KeyInput += e =>
     if (e.Key == Key.Space)
     {
         animate = !animate;
-    }
-};
-
-win.PointerInput += e =>
-{
-    if (e.Kind == PointerEventKind.Move)
-    {
-        renderer.SetMouse(e.X, e.Y);
     }
 };
 
@@ -103,8 +95,6 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
     private RenderPipeline* _pipeline;
 
     private float _time;
-    private float _mouseX = -1f;
-    private float _mouseY = -1f;
 
     private const string ShaderWgsl = """
         struct Uniforms {
@@ -161,8 +151,8 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
             return v;
         }
 
-        // A field of round stars on a hashed grid: varied brightness, warm-to-blue
-        // tint, slow twinkle. The threshold sets how many cells hold a star.
+        // A field of round stars on a hashed grid: varied brightness, white-to-
+        // lavender tint, slow twinkle. The threshold sets how many cells hold a star.
         fn starField(p: vec2f, t: f32, threshold: f32, radius: f32) -> vec3f {
             let cell = floor(p);
             let f = fract(p);
@@ -177,8 +167,8 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
                     let off = vec2f(hash21(cell + nb + vec2f(7.1, 1.3)), hash21(cell + nb + vec2f(0.7, 13.7)));
                     let d = length(nb + off - f);
                     let mag = pow(hash21(cell + nb + vec2f(3.3, 9.1)), 4.0);
-                    let twinkle = 0.65 + 0.35 * sin(t + h * TAU);
-                    let tint = mix(vec3f(1.0, 0.82, 0.6), vec3f(0.72, 0.85, 1.0), hash21(cell + nb + vec2f(5.7, 2.1)));
+                    let twinkle = 0.88 + 0.12 * sin(t + h * TAU);
+                    let tint = mix(vec3f(1.0, 1.0, 1.0), vec3f(0.74, 0.66, 1.0), hash21(cell + nb + vec2f(5.7, 2.1)));
                     c = c + tint * smoothstep(radius, 0.0, d) * (0.25 + mag) * twinkle;
                 }
             }
@@ -188,71 +178,66 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
         @fragment
         fn fs_main(@builtin(position) fragCoord: vec4f) -> @location(0) vec4f {
             let res = u.resolution;
-            var uv = (fragCoord.xy - 0.5 * res) / res.y;
+            let uvc = (fragCoord.xy - 0.5 * res) / res.y;   // screen-centered
             let t = u.time;
 
-            // The mouse tilts the view; the default is a pleasing angle.
-            let m = (u.mouse - vec2f(0.5)) * 2.0;
-            uv = rot(0.32 + m.x * 0.4) * uv;
+            var col = vec3f(0.0);
 
-            var col = vec3f(0.006, 0.008, 0.018);
+            // Sparse background stars on black.
+            col = col + starField(uvc * 7.0 + vec2f(31.0), t, 0.90, 0.075) * 0.9;
+            col = col + starField(uvc * 16.0 + vec2f(7.0), t, 0.92, 0.05) * 0.7;
 
-            // Deep background star fields at three depths, holding still as the disk turns.
-            col = col + starField(uv * 7.0 + vec2f(31.0), t, 0.86, 0.09) * 0.9;
-            col = col + starField(uv * 15.0 + vec2f(7.0), t, 0.85, 0.06) * 0.7;
-            col = col + starField(uv * 30.0 + vec2f(53.0), t, 0.86, 0.045) * 0.5;
+            // Galaxy disk: a fixed tilt opens it into an ellipse (no mouse), then it
+            // spins slowly clockwise.
+            let incl = 0.52;
+            // Pull back so the whole disk and its faint outer arms sit framed in
+            // dark space (a larger factor sees more of the galaxy).
+            let oriented = rot(0.26) * uvc * 1.3;
+            var d0 = vec2f(oriented.x, oriented.y / incl);
+            d0 = rot(-t * 0.05) * d0;
 
-            // Galaxy plane: incline the disk, then turn slowly clockwise.
-            let incl = 0.42;
-            var d = vec2f(uv.x, uv.y / incl);
-            d = rot(-t * 0.05) * d;
+            // Domain warp: nudge the coordinate by smooth noise so the arms swirl in
+            // wispy filaments of stars instead of clean bands.
+            let warp = vec2f(fbm(d0 * 2.2 + vec2f(0.0, t * 0.03)), fbm(d0 * 2.2 + vec2f(19.0, -t * 0.02))) - vec2f(0.5);
+            let d = d0 + warp * 0.10;
             let r = length(d);
             let a = atan2(d.y, d.x);
 
-            // Two arms from a log spiral, as smooth glowing bands with a dust lane.
             let phase = 2.0 * (a + 2.4 * log(r + 0.05));
-            let arm = pow(0.5 + 0.5 * cos(phase), 2.0);
+            let arm = pow(0.5 + 0.5 * cos(phase), 1.6);
             let dust = pow(0.5 + 0.5 * cos(phase + 0.8), 2.5);
-            let disk = exp(-r * 2.0);
+            let disk = exp(-r * 1.3);
 
-            let warm = vec3f(1.0, 0.80, 0.48);
-            let gold = vec3f(1.0, 0.93, 0.78);
-            let blue = vec3f(0.52, 0.70, 1.0);
+            let lav = vec3f(0.62, 0.50, 0.90);   // lavender
+            let pale = vec3f(0.86, 0.80, 1.0);   // pale violet-white
 
-            // The core shines: a white-hot center fades through gold into a warm
-            // glow that floods the whole bulge.
-            let core = exp(-r * 36.0) * 5.0 + exp(-r * 12.0) * 2.6 + exp(-r * 5.5) * 1.3;
-            col = col + mix(warm, gold, smoothstep(0.0, 1.5, core)) * core;
-            col = col + warm * exp(-r * 2.6) * 0.35;
+            // The core blazes white from a tight, bright, round center.
+            let core = exp(-r * 34.0) * 6.0 + exp(-r * 13.0) * 2.2;
+            col = col + mix(pale, vec3f(1.0), smoothstep(0.0, 1.2, core)) * core;
+            col = col + lav * exp(-r * 3.2) * 0.16;   // small inner halo
 
-            // Soft glowing nebulae: smooth colored gas, brightest along the arms.
-            // A wide smoothstep (not a hard cut) keeps the clouds soft, not blotchy.
-            let cloud = fbm(d * 3.0 + vec2f(t * 0.02, 0.0)) * fbm(d * 6.5 + vec2f(5.0, -t * 0.015));
-            let neb = smoothstep(0.04, 0.4, cloud) * disk * (0.3 + 0.8 * arm) * (1.0 - 0.5 * dust);
-            let hue = fbm(d * 1.7 + vec2f(40.0));
-            var nebCol = mix(vec3f(0.95, 0.28, 0.5), vec3f(0.3, 0.5, 1.0), hue);
-            nebCol = mix(nebCol, vec3f(0.2, 0.85, 0.7), smoothstep(0.55, 0.95, fbm(d * 2.3 + vec2f(7.0))) * 0.6);
-            col = col + nebCol * neb * 0.7;
+            // Faint purple nebulosity, only along the arms so it never fogs the disk.
+            let cloud = fbm(d * 3.5 + vec2f(t * 0.02, 0.0)) * fbm(d * 7.0 + vec2f(5.0, -t * 0.015));
+            let neb = smoothstep(0.04, 0.45, cloud) * disk * arm * (1.0 - 0.4 * dust);
+            col = col + mix(lav * 0.8, pale, arm) * neb * 0.6;
+            // A soft luminous purple body under the arms, so the stars sit in glow.
+            col = col + lav * disk * arm * 0.18;
 
-            // Smooth disk starlight from the arms, cooling outward, carved by dust.
-            let diskCol = mix(gold, blue, smoothstep(0.05, 0.6, r));
-            col = col + diskCol * disk * (0.06 + 0.7 * arm) * (1.0 - 0.6 * dust) * 0.9;
-
-            // Millions of star systems: several dense, fine star layers packed into
-            // the disk and arms. Round points, so they read as stars, never as camo.
+            // The arms ARE the stars: dense, bright white-lavender points packed hard
+            // into the spiral, thinning to almost nothing between the arms.
+            let armDensity = 0.08 + 1.6 * pow(arm, 1.3);
             let stars =
-                  starField(d * 42.0, t, 0.42, 0.05)
-                + starField(d * 80.0, t, 0.42, 0.034) * 0.85
-                + starField(d * 150.0, t, 0.46, 0.022) * 0.65;
-            col = col + stars * disk * (0.5 + 0.7 * arm) * (1.0 - 0.5 * dust) * 1.7;
+                  starField(d * 100.0, t, 0.25, 0.12)
+                + starField(d * 175.0, t, 0.30, 0.18) * 0.90
+                + starField(d * 300.0, t, 0.38, 0.28) * 0.75
+                + starField(d * 500.0, t, 0.46, 0.42) * 0.60;
+            col = col + stars * disk * armDensity * (1.0 - 0.3 * dust) * 3.6;
 
-            // Tone map, a light saturation lift, gamma, and a vignette.
-            col = col / (col + vec3f(0.72));
-            let luma = dot(col, vec3f(0.299, 0.587, 0.114));
-            col = clamp(mix(vec3f(luma), col, 1.18), vec3f(0.0), vec3f(1.0));
+            // Tone map (lets the core blow to white), gamma, gentle vignette.
+            col = col / (col + vec3f(0.62));
             col = pow(col, vec3f(0.88));
             let g = fragCoord.xy / res;
-            col = col * pow(16.0 * g.x * g.y * (1.0 - g.x) * (1.0 - g.y), 0.13);
+            col = col * pow(16.0 * g.x * g.y * (1.0 - g.x) * (1.0 - g.y), 0.12);
 
             return vec4f(col, 1.0);
         }
@@ -266,13 +251,6 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
         CreateResources();
     }
 
-    /// <summary>Tilt the view from a pointer position, in logical pixels.</summary>
-    public void SetMouse(float x, float y)
-    {
-        _mouseX = x;
-        _mouseY = y;
-    }
-
     // Draw into the pass, which arrives already started and cleared.
     public void Draw(in Frame frame, bool animate)
     {
@@ -281,15 +259,11 @@ internal sealed unsafe class GalaxyRenderer : IDisposable
             _time += (float)frame.Info.DeltaSeconds;
         }
 
-        var w = frame.Info.LogicalWidth <= 0f ? 1f : frame.Info.LogicalWidth;
-        var h = frame.Info.LogicalHeight <= 0f ? 1f : frame.Info.LogicalHeight;
         var uniforms = new Uniforms
         {
             ResX = frame.Info.PixelWidth,
             ResY = frame.Info.PixelHeight,
             Time = _time,
-            MouseX = _mouseX < 0f ? 0.5f : Math.Clamp(_mouseX / w, 0f, 1f),
-            MouseY = _mouseY < 0f ? 0.5f : Math.Clamp(_mouseY / h, 0f, 1f),
         };
         _wgpu.QueueWriteBuffer(_gpu.QueueHandle, _uniformBuffer, 0, &uniforms, (nuint)sizeof(Uniforms));
 

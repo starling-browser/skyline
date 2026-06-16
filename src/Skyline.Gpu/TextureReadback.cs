@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 using Silk.NET.WebGPU;
 using Buffer = Silk.NET.WebGPU.Buffer;
 
@@ -67,9 +69,15 @@ public sealed unsafe class TextureReadback : IDisposable
 
         while (!mapped && !failed)
         {
-            if (!_context.Poll(wait: true)) Guard.FailPollRequired("texture readback");
+            if (!_context.Poll(wait: true))
+            {
+                Guard.FailPollRequired("texture readback");
+            }
         }
-        if (failed) Guard.FailMap();
+        if (failed)
+        {
+            Guard.FailMap();
+        }
 
         var data = (byte*)_context.Api.BufferGetConstMappedRange(_buffer, 0, size);
         var pixels = new byte[_width * _height * 4];
@@ -84,8 +92,15 @@ public sealed unsafe class TextureReadback : IDisposable
 
     public void Dispose()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            return;
+        }
+
         _disposed = true;
-        if (_buffer != null) _context.Api.BufferRelease(_buffer);
+        if (_buffer != null)
+        {
+            _context.Api.BufferRelease(_buffer);
+        }
     }
 }

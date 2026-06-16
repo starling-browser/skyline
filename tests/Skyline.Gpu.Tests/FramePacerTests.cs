@@ -66,7 +66,10 @@ public unsafe class FramePacerTests
         while (!free && deadline.ElapsedMilliseconds < 5000)
         {
             free = pacer.TryWait();
-            if (!free) Thread.Sleep(1);
+            if (!free)
+            {
+                Thread.Sleep(1);
+            }
         }
         Assert.IsTrue(free);
     }

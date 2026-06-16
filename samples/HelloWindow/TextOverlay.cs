@@ -17,7 +17,11 @@ internal static class TextOverlay
     {
         scale = Math.Max(1, scale);
         var cols = 0;
-        foreach (var line in lines) cols = Math.Max(cols, line.Length);
+        foreach (var line in lines)
+        {
+            cols = Math.Max(cols, line.Length);
+        }
+
         var w = (cols * (GlyphW + 1) + Pad * 2) * scale;
         var h = (lines.Length * (GlyphH + LineGap) - LineGap + Pad * 2) * scale;
         var px = new byte[w * h * 4];
@@ -41,14 +45,20 @@ internal static class TextOverlay
                     var colBits = glyph[gx];
                     for (var gy = 0; gy < GlyphH; gy++)
                     {
-                        if ((colBits & (1 << gy)) == 0) continue;
-                        for (var sy = 0; sy < scale; sy++)
-                        for (var sx = 0; sx < scale; sx++)
+                        if ((colBits & (1 << gy)) == 0)
                         {
-                            var x = x0 + gx * scale + sx;
-                            var y = y0 + gy * scale + sy;
-                            var o = (y * w + x) * 4;
-                            px[o] = 235; px[o + 1] = 240; px[o + 2] = 245; px[o + 3] = 255;
+                            continue;
+                        }
+
+                        for (var sy = 0; sy < scale; sy++)
+                        {
+                            for (var sx = 0; sx < scale; sx++)
+                            {
+                                var x = x0 + gx * scale + sx;
+                                var y = y0 + gy * scale + sy;
+                                var o = (y * w + x) * 4;
+                                px[o] = 235; px[o + 1] = 240; px[o + 2] = 245; px[o + 3] = 255;
+                            }
                         }
                     }
                 }

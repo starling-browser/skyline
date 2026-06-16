@@ -72,9 +72,9 @@ Two windows on one device, each with its own render thread:
 dotnet run --project samples/TwoWindows
 ```
 
-The Milky Way as a slowly turning spiral galaxy, drawn by one app-owned
-full-screen shader — a glowing core, spiral arms, dust lanes, and a field
-of stars:
+A spiral galaxy as one app-owned full-screen shader — a blazing white core
+with a light shaft, purple nebulosity, and arms swirled out of millions of
+slowly turning stars:
 
 ```sh
 dotnet run --project samples/TexturedQuad

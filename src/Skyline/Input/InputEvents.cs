@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 namespace Skyline.Input;
 
 public enum PointerEventKind

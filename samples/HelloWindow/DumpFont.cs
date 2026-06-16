@@ -10,7 +10,10 @@ internal static class DumpFont
         {
             var line = new char[w];
             for (var x = 0; x < w; x++)
+            {
                 line[x] = px[(y * w + x) * 4] > 100 ? '#' : ' ';
+            }
+
             Console.WriteLine(new string(line));
         }
         return 0;
