@@ -22,6 +22,8 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     private readonly Func<Silk.NET.Input.Key, bool> _pressed;
     // One native cursor per shape, created on first use and freed in Dispose.
     private readonly Dictionary<Silk.NET.GLFW.CursorShape, nint> _cursors = new();
+    // Held so the garbage collector cannot reclaim it while GLFW holds its pointer.
+    private readonly GlfwCallbacks.CursorEnterCallback _cursorEnter;
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
@@ -75,6 +77,10 @@ internal sealed class GlfwWindowBackend : IWindowBackend
             keyboard.KeyUp += (_, k, _) => Key?.Invoke(new KeyEvent(false, AppWindow.MapKey(k), (int)k, ModifierKeysMap.FromPressed(_pressed)));
             keyboard.KeyChar += (_, ch) => Text?.Invoke(new TextEvent(ch));
         }
+
+        // Silk.NET's input layer has no cursor enter/leave, so set the raw GLFW
+        // callback. No position comes with it, so report the last-known origin.
+        _glfw.SetCursorEnterCallback(_glfwHandle, _cursorEnter = (_, entered) => Pointer?.Invoke(new PointerEvent(entered ? PointerEventKind.Enter : PointerEventKind.Leave, 0, 0, -1, 0, 0)));
     }
 
     public (int Width, int Height) FramebufferSize => (_window.FramebufferSize.X, _window.FramebufferSize.Y);

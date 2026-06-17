@@ -8,6 +8,12 @@ public enum PointerEventKind
     Down,
     Up,
     Wheel,
+
+    /// <summary>The pointer entered the window's content area.</summary>
+    Enter,
+
+    /// <summary>The pointer left the window. Clear hover and reset the cursor.</summary>
+    Leave,
 }
 
 /// <summary>
