@@ -101,9 +101,13 @@ using (var cursorWin = new AppWindow(new AppWindowOptions { Title = "cursor", Wi
     var cursorOk = true;
     try
     {
-        foreach (var shape in Enum.GetValues<CursorShape>())
+        // Two passes: the second reuses each cached cursor instead of recreating it.
+        for (var pass = 0; pass < 2; pass++)
         {
-            cursorWin.SetCursor(shape);
+            foreach (var shape in Enum.GetValues<CursorShape>())
+            {
+                cursorWin.SetCursor(shape);
+            }
         }
     }
     catch

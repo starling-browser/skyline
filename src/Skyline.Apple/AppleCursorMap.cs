@@ -20,7 +20,6 @@ internal static class AppleCursorMap
         CursorShape.NotAllowed => NSCursor.OperationNotAllowedCursor,
         CursorShape.Grab => NSCursor.OpenHandCursor,
         CursorShape.Grabbing => NSCursor.ClosedHandCursor,
-        CursorShape.Move => NSCursor.ClosedHandCursor,
         CursorShape.ResizeEw => NSCursor.ResizeLeftRightCursor,
         CursorShape.ResizeNs => NSCursor.ResizeUpDownCursor,
         _ => NSCursor.ArrowCursor,

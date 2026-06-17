@@ -20,6 +20,8 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     private readonly unsafe WindowHandle* _glfwHandle;
     private readonly WindowSurfaceSource _surfaceSource;
     private readonly Func<Silk.NET.Input.Key, bool> _pressed;
+    // One native cursor per shape, created on first use and freed in Dispose.
+    private readonly Dictionary<Silk.NET.GLFW.CursorShape, nint> _cursors = new();
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
@@ -104,17 +106,31 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
     public void Restore() => _window.WindowState = WindowState.Normal;
 
-    public void SetCursor(Skyline.Input.CursorShape shape)
+    public unsafe void SetCursor(Skyline.Input.CursorShape shape)
     {
-        var standard = CursorShapeMap.ToStandardCursor(shape);
-        foreach (var mouse in _input.Mice)
-        {
-            mouse.Cursor.StandardCursor = standard;
-        }
+        var glfwShape = CursorShapeMap.ToGlfwCursor(shape);
+        _glfw.SetCursor(_glfwHandle, glfwShape is { } s ? GetOrCreateCursor(s) : null);
     }
 
-    public void Dispose()
+    // Create each native cursor once and reuse it: a fresh CreateStandardCursor
+    // per call would leak, since these are freed only by DestroyCursor. A shape
+    // this platform lacks comes back null, which SetCursor shows as the arrow.
+    private unsafe Cursor* GetOrCreateCursor(Silk.NET.GLFW.CursorShape shape)
     {
+        if (!_cursors.TryGetValue(shape, out var cached))
+        {
+            cached = (nint)_glfw.CreateStandardCursor(shape);
+            _cursors[shape] = cached;
+        }
+        return (Cursor*)cached;
+    }
+
+    public unsafe void Dispose()
+    {
+        foreach (var cursor in _cursors.Values)
+        {
+            _glfw.DestroyCursor((Cursor*)cursor);
+        }
         _input.Dispose();
         _window.Dispose();
     }

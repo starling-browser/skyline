@@ -187,9 +187,9 @@ public sealed class AppWindow : IDisposable
     public void Resize(int width, int height) => _backend.Resize(width, height);
 
     /// <summary>
-    /// Set the OS cursor shown over the window's content. Drive it from the
-    /// hit-tested element as the pointer moves. A shape the platform has no
-    /// cursor for falls back to the default arrow.
+    /// Set the OS cursor shown over the window's content. Main thread only.
+    /// Drive it from the hit-tested element as the pointer moves. A shape the
+    /// platform has no cursor for falls back to the default arrow.
     /// </summary>
     public void SetCursor(CursorShape shape) => _backend.SetCursor(shape);
 

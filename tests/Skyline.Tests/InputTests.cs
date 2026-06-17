@@ -107,30 +107,31 @@ public class InputTests
     }
 
     [DataTestMethod]
-    [DataRow(CursorShape.Default, Silk.NET.Input.StandardCursor.Default)]
-    [DataRow(CursorShape.Pointer, Silk.NET.Input.StandardCursor.Hand)]
-    [DataRow(CursorShape.Text, Silk.NET.Input.StandardCursor.IBeam)]
-    [DataRow(CursorShape.Crosshair, Silk.NET.Input.StandardCursor.Crosshair)]
-    [DataRow(CursorShape.Move, Silk.NET.Input.StandardCursor.ResizeAll)]
-    [DataRow(CursorShape.Wait, Silk.NET.Input.StandardCursor.Default)]
-    [DataRow(CursorShape.Progress, Silk.NET.Input.StandardCursor.Default)]
-    [DataRow(CursorShape.NotAllowed, Silk.NET.Input.StandardCursor.NotAllowed)]
-    [DataRow(CursorShape.Grab, Silk.NET.Input.StandardCursor.Hand)]
-    [DataRow(CursorShape.Grabbing, Silk.NET.Input.StandardCursor.Hand)]
-    [DataRow(CursorShape.ResizeEw, Silk.NET.Input.StandardCursor.HResize)]
-    [DataRow(CursorShape.ResizeNs, Silk.NET.Input.StandardCursor.VResize)]
-    [DataRow(CursorShape.ResizeNwse, Silk.NET.Input.StandardCursor.NwseResize)]
-    [DataRow(CursorShape.ResizeNesw, Silk.NET.Input.StandardCursor.NeswResize)]
-    [DataRow(CursorShape.ResizeAll, Silk.NET.Input.StandardCursor.ResizeAll)]
-    public void CursorShapeMapsToStandardCursor(CursorShape shape, Silk.NET.Input.StandardCursor expected)
+    [DataRow(CursorShape.Pointer, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.Text, Silk.NET.GLFW.CursorShape.IBeam)]
+    [DataRow(CursorShape.Crosshair, Silk.NET.GLFW.CursorShape.Crosshair)]
+    [DataRow(CursorShape.Move, Silk.NET.GLFW.CursorShape.AllResize)]
+    [DataRow(CursorShape.NotAllowed, Silk.NET.GLFW.CursorShape.NotAllowed)]
+    [DataRow(CursorShape.Grab, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.Grabbing, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.ResizeEw, Silk.NET.GLFW.CursorShape.HResize)]
+    [DataRow(CursorShape.ResizeNs, Silk.NET.GLFW.CursorShape.VResize)]
+    [DataRow(CursorShape.ResizeNwse, Silk.NET.GLFW.CursorShape.NwseResize)]
+    [DataRow(CursorShape.ResizeNesw, Silk.NET.GLFW.CursorShape.NeswResize)]
+    [DataRow(CursorShape.ResizeAll, Silk.NET.GLFW.CursorShape.AllResize)]
+    public void CursorShapeMapsToGlfwCursor(CursorShape shape, Silk.NET.GLFW.CursorShape expected)
     {
-        Assert.AreEqual(expected, CursorShapeMap.ToStandardCursor(shape));
+        Assert.AreEqual(expected, CursorShapeMap.ToGlfwCursor(shape));
     }
 
-    [TestMethod]
-    public void CursorShapeMapFallsBackToDefault()
+    [DataTestMethod]
+    [DataRow(CursorShape.Default)]
+    [DataRow(CursorShape.Wait)]
+    [DataRow(CursorShape.Progress)]
+    [DataRow((CursorShape)999)]
+    public void CursorShapeWithNoGlfwCursorMapsToNull(CursorShape shape)
     {
-        // An out-of-range shape falls back to the default arrow.
-        Assert.AreEqual(Silk.NET.Input.StandardCursor.Default, CursorShapeMap.ToStandardCursor((CursorShape)999));
+        // Default, the busy shapes, and anything out of range show the OS arrow.
+        Assert.IsNull(CursorShapeMap.ToGlfwCursor(shape));
     }
 }
