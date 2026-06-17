@@ -31,6 +31,9 @@ internal interface IWindowBackend : IDisposable
     /// <summary>Minimized state changed; true when minimized.</summary>
     event Action<bool>? MinimizedChanged;
 
+    /// <summary>Focus changed; true when the window became active.</summary>
+    event Action<bool>? FocusChanged;
+
     /// <summary>A frame tick from the backend's own loop, with the delta seconds.</summary>
     event Action<double>? Render;
 

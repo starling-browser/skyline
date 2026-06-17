@@ -21,6 +21,7 @@ public class WindowBackendFactoryTests
 
         public event Action<(int Width, int Height)>? FramebufferResized;
         public event Action<bool>? MinimizedChanged;
+        public event Action<bool>? FocusChanged;
         public event Action<double>? Render;
         public event Action<PointerEvent>? Pointer;
         public event Action<KeyEvent>? Key;

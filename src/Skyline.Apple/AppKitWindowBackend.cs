@@ -28,6 +28,7 @@ internal sealed class AppKitWindowBackend : IWindowBackend
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
+    public event Action<bool>? FocusChanged;
     public event Action<double>? Render;
     public event Action<PointerEvent>? Pointer;
     public event Action<KeyEvent>? Key;
@@ -162,6 +163,8 @@ internal sealed class AppKitWindowBackend : IWindowBackend
 
     internal void OnMinimizedChanged(bool minimized) => MinimizedChanged?.Invoke(minimized);
 
+    internal void OnFocusChanged(bool focused) => FocusChanged?.Invoke(focused);
+
     public void Dispose()
     {
         _window.Delegate = null;
@@ -181,5 +184,9 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         public override void DidMiniaturize(NSNotification notification) => backend.OnMinimizedChanged(true);
 
         public override void DidDeminiaturize(NSNotification notification) => backend.OnMinimizedChanged(false);
+
+        public override void DidBecomeKey(NSNotification notification) => backend.OnFocusChanged(true);
+
+        public override void DidResignKey(NSNotification notification) => backend.OnFocusChanged(false);
     }
 }

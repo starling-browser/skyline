@@ -97,6 +97,7 @@ public sealed class AppWindow : IDisposable
         _backend.Pointer += e => PointerInput?.Invoke(e);
         _backend.Key += e => KeyInput?.Invoke(e);
         _backend.Text += e => TextInput?.Invoke(e);
+        _backend.FocusChanged += focused => FocusChanged?.Invoke(focused);
     }
 
     internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy) =>
@@ -138,6 +139,12 @@ public sealed class AppWindow : IDisposable
     public event Action<PointerEvent>? PointerInput;
     public event Action<KeyEvent>? KeyInput;
     public event Action<TextEvent>? TextInput;
+
+    /// <summary>
+    /// The window gained or lost focus (true = active). Pause animation,
+    /// timers, and media while blurred; resume on focus.
+    /// </summary>
+    public event Action<bool>? FocusChanged;
 
     /// <summary>
     /// When set and returning false, the frame is skipped and the loop
