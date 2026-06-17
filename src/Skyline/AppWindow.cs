@@ -158,6 +158,21 @@ public sealed class AppWindow : IDisposable
         set => _backend.ClipboardText = value;
     }
 
+    /// <summary>The MIME types currently on the clipboard.</summary>
+    public IReadOnlyList<string> ClipboardFormats => _backend.ClipboardFormats;
+
+    /// <summary>
+    /// Read clipboard data for a MIME type (for example "image/png" or
+    /// "text/html"), or null if the clipboard holds no such type.
+    /// </summary>
+    public byte[]? GetClipboardData(string mimeType) => _backend.GetClipboardData(mimeType);
+
+    /// <summary>
+    /// Write clipboard data under a MIME type, replacing the clipboard. The
+    /// GLFW backend stores text only; other types are dropped there.
+    /// </summary>
+    public void SetClipboardData(string mimeType, byte[] data) => _backend.SetClipboardData(mimeType, data);
+
     public FrameInfo CurrentFrame => Frame(0);
 
     /// <summary>True when this window has been adopted by an <see cref="AppHost"/>. Hosted windows render on the host's thread, so use <c>AppHost.Run</c>, not <see cref="Run"/>.</summary>

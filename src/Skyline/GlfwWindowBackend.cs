@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
+using System.Text;
 using Silk.NET.GLFW;
 using Silk.NET.Input;
 using Silk.NET.Maths;
@@ -86,6 +87,30 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     {
         get => _glfw.GetClipboardString(_glfwHandle);
         set => _glfw.SetClipboardString(_glfwHandle, value ?? string.Empty);
+    }
+
+    // GLFW's clipboard is text only, so it reports and stores text/plain alone.
+    private static readonly string[] TextFormats = ["text/plain"];
+
+    public unsafe IReadOnlyList<string> ClipboardFormats =>
+        string.IsNullOrEmpty(_glfw.GetClipboardString(_glfwHandle)) ? [] : TextFormats;
+
+    public unsafe byte[]? GetClipboardData(string mimeType)
+    {
+        if (mimeType == "text/plain" && _glfw.GetClipboardString(_glfwHandle) is { Length: > 0 } s)
+        {
+            return Encoding.UTF8.GetBytes(s);
+        }
+        return null;
+    }
+
+    public unsafe void SetClipboardData(string mimeType, byte[] data)
+    {
+        // Other MIME types are dropped: GLFW has nowhere to put them.
+        if (mimeType == "text/plain")
+        {
+            _glfw.SetClipboardString(_glfwHandle, Encoding.UTF8.GetString(data));
+        }
     }
 
     public bool IsClosing => _window.IsClosing;

@@ -16,6 +16,9 @@ public class WindowBackendFactoryTests
         public (int Width, int Height) LogicalSize => (100, 50);
         public string Title { get; set; } = "fake";
         public string? ClipboardText { get; set; }
+        public IReadOnlyList<string> ClipboardFormats => [];
+        public byte[]? GetClipboardData(string mimeType) => null;
+        public void SetClipboardData(string mimeType, byte[] data) { }
         public bool IsClosing => false;
         public WindowSurfaceSource SurfaceSource { get; } = new WindowSurfaceSource.MetalLayer(0x1234);
 
