@@ -42,6 +42,17 @@ Check(win.Surface is not null, "native surface source is exposed");
 win.ClipboardText = "skyline-test";
 Check(win.ClipboardText == "skyline-test", "clipboard round-trips");
 
+// Typed clipboard on the GLFW backend (text only there).
+using (var clipWin = new AppWindow(new AppWindowOptions { Title = "clip", Width = 160, Height = 120, ForceGlfw = true }))
+{
+    clipWin.SetClipboardData("text/plain", System.Text.Encoding.UTF8.GetBytes("typed-clip"));
+    var back = clipWin.GetClipboardData("text/plain");
+    Check(back is not null && System.Text.Encoding.UTF8.GetString(back) == "typed-clip", "typed text clipboard round-trips on GLFW");
+    Check(clipWin.GetClipboardData("image/png") is null, "GLFW reports no data for an unsupported type");
+    clipWin.SetClipboardData("image/png", [1, 2, 3]); // dropped, must not throw
+    Check(clipWin.ClipboardFormats.Contains("text/plain"), "ClipboardFormats lists text/plain when text is present");
+}
+
 win.PumpEvents(); // must not throw without a host
 
 // --- Chrome modes construct on the GLFW backend ------------------------

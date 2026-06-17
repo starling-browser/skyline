@@ -20,6 +20,15 @@ internal interface IWindowBackend : IDisposable
     string Title { get; set; }
     string? ClipboardText { get; set; }
 
+    /// <summary>The MIME types currently on the clipboard.</summary>
+    IReadOnlyList<string> ClipboardFormats { get; }
+
+    /// <summary>Read clipboard data for a MIME type, or null if absent.</summary>
+    byte[]? GetClipboardData(string mimeType);
+
+    /// <summary>Write clipboard data under a MIME type, replacing the clipboard.</summary>
+    void SetClipboardData(string mimeType, byte[] data);
+
     bool IsClosing { get; }
 
     /// <summary>How a presenter builds a surface for this window.</summary>

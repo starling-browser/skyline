@@ -129,6 +129,57 @@ internal sealed class AppKitWindowBackend : IWindowBackend
         }
     }
 
+    // MIME type to macOS pasteboard UTI, for the formats a browser moves most.
+    private static readonly (string Mime, string Uti)[] ClipboardTypeMap =
+    [
+        ("text/plain", PasteboardText),
+        ("text/html", "public.html"),
+        ("image/png", "public.png"),
+    ];
+
+    private static string? MimeToUti(string mime)
+    {
+        foreach (var (m, uti) in ClipboardTypeMap)
+        {
+            if (m == mime)
+            {
+                return uti;
+            }
+        }
+        return null;
+    }
+
+    public IReadOnlyList<string> ClipboardFormats
+    {
+        get
+        {
+            var pb = NSPasteboard.GeneralPasteboard;
+            var formats = new List<string>();
+            foreach (var (mime, uti) in ClipboardTypeMap)
+            {
+                if (pb.GetDataForType(uti) is not null)
+                {
+                    formats.Add(mime);
+                }
+            }
+            return formats;
+        }
+    }
+
+    public byte[]? GetClipboardData(string mimeType) =>
+        MimeToUti(mimeType) is { } uti ? NSPasteboard.GeneralPasteboard.GetDataForType(uti)?.ToArray() : null;
+
+    public void SetClipboardData(string mimeType, byte[] data)
+    {
+        if (MimeToUti(mimeType) is not { } uti)
+        {
+            return;
+        }
+        var pb = NSPasteboard.GeneralPasteboard;
+        pb.ClearContents();
+        pb.SetDataForType(NSData.FromArray(data), uti);
+    }
+
     public bool IsClosing => _closing;
 
     public WindowSurfaceSource SurfaceSource => _surfaceSource;
