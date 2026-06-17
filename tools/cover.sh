@@ -23,6 +23,6 @@ dotnet reportgenerator \
   -reports:"coverage/unit/*/coverage.cobertura.xml;coverage/windowed.cobertura.xml" \
   -targetdir:coverage/report \
   "-reporttypes:TextSummary" \
-  "-assemblyfilters:+Skyline;+Skyline.Gpu;+Skyline.Render;+Skyline.Interaction;+Skyline.Interaction.Ui"
+  "-assemblyfilters:+Skyline;+Skyline.Gpu;+Skyline.Render;+Skyline.Interaction;+Skyline.Interaction.Ui;+Skyline.Interaction.Gpu"
 
 cat coverage/report/Summary.txt
