@@ -63,7 +63,9 @@ foreach (var chrome in new[] { ChromeMode.Fixed, ChromeMode.Borderless, ChromeMo
 }
 
 var soloResized = false;
-win.Resized += _ => soloResized = true;
+var winHandler = new CallbackAppWindowHandler();
+win.Handler = winHandler;
+winHandler.Resized = (_, _) => soloResized = true;
 win.Resize(360, 270);
 win.PumpEvents();
 Check(soloResized, "Resize fires Resized in single-window mode");
@@ -74,9 +76,9 @@ frame = win.CurrentFrame;
 PointerEvent? pointer = null;
 KeyEvent? key = null;
 TextEvent? text = null;
-win.PointerInput += e => pointer = e;
-win.KeyInput += e => key = e;
-win.TextInput += e => text = e;
+winHandler.PointerInput = (_, e) => pointer = e;
+winHandler.KeyInput = (_, e) => key = e;
+winHandler.TextInput = (_, e) => text = e;
 
 win.RaisePointer(PointerEventKind.Down, 10f, 20f, 0, 0, 0);
 Check(pointer is { Kind: PointerEventKind.Down, X: 10f, Y: 20f, Button: 0, Modifiers: ModifierKeys.None }, "RaisePointer reaches PointerInput");
@@ -276,7 +278,9 @@ using (var solo = new AppWindow(new AppWindowOptions { Title = "solo", Width = 1
     var frames = 0;
     var idleFrames = 0;
     solo.IsDirty = () => idleFrames++ >= 3; // exercise the idle-sleep path first
-    solo.RenderFrame += f =>
+    var soloHandler = new CallbackAppWindowHandler();
+    solo.Handler = soloHandler;
+    soloHandler.RenderFrame = (_, _) =>
     {
         frames++;
         if (frames >= 3)
@@ -298,6 +302,11 @@ using (var host = new AppHost())
     host.AddWindow(winA);
     host.AddWindow(winB);
 
+    var winAHandler = new CallbackAppWindowHandler();
+    var winBHandler = new CallbackAppWindowHandler();
+    winA.Handler = winAHandler;
+    winB.Handler = winBHandler;
+
     var doubleAdd = false;
     try { host.AddWindow(winA); } catch (InvalidOperationException) { doubleAdd = true; }
     Check(doubleAdd, "adding a window to a host twice throws");
@@ -315,7 +324,7 @@ using (var host = new AppHost())
     var idledOnceB = false;
     var hostedResizeThread = 0;
 
-    winB.Resized += _ => hostedResizeThread = Environment.CurrentManagedThreadId;
+    winBHandler.Resized = (_, _) => hostedResizeThread = Environment.CurrentManagedThreadId;
     winB.IsDirty = () =>
     {
         // Return false exactly once to walk the host's idle-wait path.
@@ -328,7 +337,7 @@ using (var host = new AppHost())
         return true;
     };
 
-    winA.RenderFrame += _ =>
+    winAHandler.RenderFrame = (_, _) =>
     {
         renderThreadA = Environment.CurrentManagedThreadId;
         framesA++;
@@ -348,7 +357,7 @@ using (var host = new AppHost())
             winA.RequestClose();
         }
     };
-    winB.RenderFrame += _ =>
+    winBHandler.RenderFrame = (_, _) =>
     {
         renderThreadB = Environment.CurrentManagedThreadId;
         framesB++;
@@ -413,7 +422,9 @@ using (var host = new AppHost())
     var lateFrames = 0;
     var firstFrames = 0;
 
-    first.RenderFrame += _ =>
+    var firstHandler = new CallbackAppWindowHandler();
+    first.Handler = firstHandler;
+    firstHandler.RenderFrame = (_, _) =>
     {
         firstFrames++;
         Thread.Sleep(2); // pace so the late window's thread has time to spin up
@@ -425,7 +436,9 @@ using (var host = new AppHost())
             host.Invoke(() =>
             {
                 late = new AppWindow(new AppWindowOptions { Title = "late", Width = 160, Height = 120 });
-                late.RenderFrame += _ =>
+                var lateHandler = new CallbackAppWindowHandler();
+                late.Handler = lateHandler;
+                lateHandler.RenderFrame = (_, _) =>
                 {
                     lateThread = Environment.CurrentManagedThreadId;
                     lateRendered = true;
@@ -498,12 +511,12 @@ using (var rwin = new AppWindow(new AppWindowOptions { Title = "frameloop attach
     var rframes = 0;
     var ejectSeen = false;
     var rloopResized = false;
-    rwin.Resized += _ => rloopResized = true;
 
     using var loop = FrameLoop.Attach(rwin, new FrameLoopOptions
     {
         ClearColor = new Silk.NET.WebGPU.Color { R = 0.0, G = 0.4, B = 0.8, A = 1.0 },
     });
+    loop.Handler = new CallbackAppWindowHandler { Resized = (_, _) => rloopResized = true };
     Check(ReferenceEquals(loop.Surface, loop.Gpu.Surface), "FrameLoop.Surface is the context surface");
     Check(loop.Pacer.MaxFramesInFlight == 2, "FrameLoop exposes its pacer");
 

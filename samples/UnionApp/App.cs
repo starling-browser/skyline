@@ -45,12 +45,15 @@ public sealed class App
         });
 
         var presented = 0;
-        win.KeyInput += e =>
+        loop.Handler = new CallbackAppWindowHandler
         {
-            if (e.IsDown && e.Key == Key.Escape)
+            KeyInput = (_, e) =>
             {
-                win.RequestClose();
-            }
+                if (e.IsDown && e.Key == Key.Escape)
+                {
+                    win.RequestClose();
+                }
+            },
         };
         loop.OnRender = (in Frame frame) =>
         {

@@ -38,7 +38,7 @@ using var loop = FrameLoop.Attach(window, new FrameLoopOptions
 using var quads = new QuadRenderer(loop.Gpu, loop.Surface.Format);
 var slider = new Slider();
 slider.Layout(window.CurrentFrame.LogicalWidth, window.CurrentFrame.LogicalHeight);
-window.PointerInput += slider.OnPointer;
+loop.Handler = new CallbackAppWindowHandler { PointerInput = (_, e) => slider.OnPointer(e) };
 
 Console.WriteLine("Drag the slider to change the window transparency.");
 

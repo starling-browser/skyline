@@ -50,7 +50,8 @@ var shell = new InProcessApprovalShell(overlay);
 // The desktop input bridge: it mints the local person and routes pointer-downs
 // to the overlay, and wraps the window clipboard behind the transfer seam.
 var source = new AppWindowInteractionSource(overlay, new AppWindowClipboard(win));
-win.PointerInput += source.OnPointerEvent;
+var handler = new CallbackAppWindowHandler { PointerInput = (_, e) => source.OnPointerEvent(e) };
+loop.Handler = handler;
 
 var planner = new Actor("planner", "Planner", ActorKind.Ai, ActorLocality.Local);
 var formFiller = new Actor("form-filler", "Form Filler", ActorKind.Automation, ActorLocality.Local);
@@ -63,7 +64,7 @@ async Task Authorize(Actor actor, InteractionCapability capability, string promp
         : $"  GRANTED {actor.DisplayName} / {capability}");
 }
 
-win.KeyInput += async e =>
+handler.KeyInput = async (_, e) =>
 {
     if (!e.IsDown)
     {

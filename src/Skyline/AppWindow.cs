@@ -53,7 +53,7 @@ public sealed class AppWindow : IDisposable
             if (Host is null)
             {
                 _geom = g;
-                Resized?.Invoke(Frame(0));
+                Handler?.OnResized(this, Frame(0));
             }
             else
             {
@@ -91,23 +91,23 @@ public sealed class AppWindow : IDisposable
                 Thread.Sleep(8);
                 return;
             }
-            RenderFrame?.Invoke(Frame(delta));
+            Handler?.OnRenderFrame(this, Frame(delta));
         };
 
-        _backend.Pointer += e => PointerInput?.Invoke(e);
-        _backend.Key += e => KeyInput?.Invoke(e);
-        _backend.Text += e => TextInput?.Invoke(e);
-        _backend.FocusChanged += focused => FocusChanged?.Invoke(focused);
+        _backend.Pointer += e => Handler?.OnPointerInput(this, e);
+        _backend.Key += e => Handler?.OnKeyInput(this, e);
+        _backend.Text += e => Handler?.OnTextInput(this, e);
+        _backend.FocusChanged += focused => Handler?.OnFocusChanged(this, new WindowFocusEvent(focused));
     }
 
     internal void RaisePointer(PointerEventKind kind, float x, float y, int button, float wheelDx, float wheelDy, ModifierKeys modifiers = ModifierKeys.None) =>
-        PointerInput?.Invoke(new PointerEvent(kind, x, y, button, wheelDx, wheelDy, modifiers));
+        Handler?.OnPointerInput(this, new PointerEvent(kind, x, y, button, wheelDx, wheelDy, modifiers));
 
     internal void RaiseKey(bool isDown, Silk.NET.Input.Key key, ModifierKeys modifiers = ModifierKeys.None) =>
-        KeyInput?.Invoke(new KeyEvent(isDown, MapKey(key), (int)key, modifiers));
+        Handler?.OnKeyInput(this, new KeyEvent(isDown, MapKey(key), (int)key, modifiers));
 
     internal void RaiseText(char character) =>
-        TextInput?.Invoke(new TextEvent(character));
+        Handler?.OnTextInput(this, new TextEvent(character));
 
     /// <summary>
     /// The native window as a surface source. Hand this to your renderer
@@ -130,21 +130,13 @@ public sealed class AppWindow : IDisposable
     /// </summary>
     public nint? MetalLayer => _backend.SurfaceSource is WindowSurfaceSource.MetalLayer m ? m.Layer : null;
 
-    /// <summary>Draw and present a frame. Skyline never presents for you.</summary>
-    public event Action<FrameInfo>? RenderFrame;
-
-    /// <summary>Framebuffer size changed. Reconfigure your swapchain.</summary>
-    public event Action<FrameInfo>? Resized;
-
-    public event Action<PointerEvent>? PointerInput;
-    public event Action<KeyEvent>? KeyInput;
-    public event Action<TextEvent>? TextInput;
-
     /// <summary>
-    /// The window gained or lost focus (true = active). Pause animation,
-    /// timers, and media while blurred; resume on focus.
+    /// The window's single handler — input, render, resize, and focus callbacks.
+    /// A window has one owner, so it takes one handler, not multicast events.
+    /// Subclass <see cref="AppWindowHandler"/>, or use
+    /// <see cref="CallbackAppWindowHandler"/> for lambda-style hookup.
     /// </summary>
-    public event Action<bool>? FocusChanged;
+    public AppWindowHandler? Handler { get; set; }
 
     /// <summary>
     /// When set and returning false, the frame is skipped and the loop
@@ -197,7 +189,7 @@ public sealed class AppWindow : IDisposable
     /// </summary>
     public void RequestRedraw() => _redraw.Set();
 
-    /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
+    /// <summary>Resize to a logical size. Main thread only; <see cref="AppWindowHandler.OnResized"/> follows.</summary>
     public void Resize(int width, int height) => _backend.Resize(width, height);
 
     /// <summary>
@@ -229,7 +221,7 @@ public sealed class AppWindow : IDisposable
     /// <summary>
     /// Process pending OS events once, without the built-in loop. For
     /// consumers that drive their own frame loop — engines, benchmarks —
-    /// instead of subscribing to <see cref="RenderFrame"/>.
+    /// instead of setting a <see cref="Handler"/> for <see cref="AppWindowHandler.OnRenderFrame"/>.
     /// </summary>
     public void PumpEvents() => _backend.PumpEventsOnce();
 
@@ -250,7 +242,7 @@ public sealed class AppWindow : IDisposable
     internal bool IsClosing => _backend.IsClosing;
     internal bool IsMinimized => _minimized;
     internal bool ShouldRenderNow => IsDirty?.Invoke() != false;
-    internal void RaiseRenderFrame(double delta) => RenderFrame?.Invoke(Frame(delta));
+    internal void RaiseRenderFrame(double delta) => Handler?.OnRenderFrame(this, Frame(delta));
     internal bool WaitForRedraw(int milliseconds) => _redraw.WaitOne(milliseconds);
 
     internal bool TryConsumePendingResize(out FrameInfo frame)
@@ -266,7 +258,7 @@ public sealed class AppWindow : IDisposable
         return true;
     }
 
-    internal void RaiseResized(FrameInfo frame) => Resized?.Invoke(frame);
+    internal void RaiseResized(FrameInfo frame) => Handler?.OnResized(this, frame);
 
     internal static Input.Key MapKey(Silk.NET.Input.Key k)
     {

@@ -29,13 +29,16 @@ using var renderer = new CanvasRenderer(loop, win.CurrentFrame);
 var drawing = false;
 var presented = 0;
 
-win.Resized += _ =>
+var handler = new CallbackAppWindowHandler();
+loop.Handler = handler;
+
+handler.Resized = (_, _) =>
 {
     renderer.MarkDirty(); // logical size changed — geometry must recompute
     loop.RequestRedraw();
 };
 
-win.PointerInput += e =>
+handler.PointerInput = (_, e) =>
 {
     if (e.Kind == PointerEventKind.Down)
     {
@@ -54,7 +57,7 @@ win.PointerInput += e =>
     }
 };
 
-win.KeyInput += e =>
+handler.KeyInput = (_, e) =>
 {
     if (!e.IsDown)
     {
