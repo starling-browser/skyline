@@ -25,6 +25,7 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
     public event Action<(int Width, int Height)>? FramebufferResized;
     public event Action<bool>? MinimizedChanged;
+    public event Action<bool>? FocusChanged;
     public event Action<double>? Render;
     public event Action<PointerEvent>? Pointer;
     public event Action<KeyEvent>? Key;
@@ -54,6 +55,7 @@ internal sealed class GlfwWindowBackend : IWindowBackend
 
         _window.FramebufferResize += sz => FramebufferResized?.Invoke((sz.X, sz.Y));
         _window.StateChanged += state => MinimizedChanged?.Invoke(state == WindowState.Minimized);
+        _window.FocusChanged += focused => FocusChanged?.Invoke(focused);
         _window.Render += delta => Render?.Invoke(delta);
 
         _input = _window.CreateInput();
