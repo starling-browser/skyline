@@ -90,6 +90,15 @@ internal sealed class MetalView : NSView
         Pointer?.Invoke(new PointerEvent(PointerEventKind.Up, x, y, button, 0, 0, AppleModifierMap.Map(e.ModifierFlags)));
     }
 
+    private void EnterLeave(NSEvent e, PointerEventKind kind)
+    {
+        var (x, y) = Local(e);
+        Pointer?.Invoke(new PointerEvent(kind, x, y, -1, 0, 0));
+    }
+
+    public override void MouseEntered(NSEvent theEvent) => EnterLeave(theEvent, PointerEventKind.Enter);
+    public override void MouseExited(NSEvent theEvent) => EnterLeave(theEvent, PointerEventKind.Leave);
+
     public override void MouseMoved(NSEvent theEvent) => Move(theEvent);
     public override void MouseDragged(NSEvent theEvent) => Move(theEvent);
     public override void RightMouseDragged(NSEvent theEvent) => Move(theEvent);
