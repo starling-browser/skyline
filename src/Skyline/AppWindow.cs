@@ -158,6 +158,13 @@ public sealed class AppWindow : IDisposable
         set => _backend.ClipboardText = value;
     }
 
+    /// <summary>
+    /// The display's refresh rate in Hz. Pace animation to this. On macOS it
+    /// is the window's screen rate; on GLFW it is the window's monitor rate
+    /// when known (set in fullscreen), otherwise 60.
+    /// </summary>
+    public double RefreshRate => _backend.RefreshRate;
+
     public FrameInfo CurrentFrame => Frame(0);
 
     /// <summary>True when this window has been adopted by an <see cref="AppHost"/>. Hosted windows render on the host's thread, so use <c>AppHost.Run</c>, not <see cref="Run"/>.</summary>

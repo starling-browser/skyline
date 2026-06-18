@@ -38,6 +38,7 @@ Check(frame.PixelWidth > 0 && frame.PixelHeight > 0, "CurrentFrame has pixel siz
 Check(frame.Dpr > 0, "CurrentFrame has a device pixel ratio");
 Check(Math.Abs(frame.LogicalWidth - frame.PixelWidth / frame.Dpr) < 0.01, "logical width derives from Dpr");
 Check(win.Surface is not null, "native surface source is exposed");
+Check(win.RefreshRate > 0, "RefreshRate reports a positive display rate");
 
 win.ClipboardText = "skyline-test";
 Check(win.ClipboardText == "skyline-test", "clipboard round-trips");
@@ -58,6 +59,7 @@ foreach (var chrome in new[] { ChromeMode.Fixed, ChromeMode.Borderless, ChromeMo
     });
     var cf = chromed.CurrentFrame;
     Check(cf.PixelWidth > 0 && cf.PixelHeight > 0, $"{chrome} window constructs with a real surface");
+    Check(chromed.RefreshRate > 0, $"{chrome} GLFW window reports a refresh rate");
 }
 
 var soloResized = false;

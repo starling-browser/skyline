@@ -78,6 +78,9 @@ internal sealed class GlfwWindowBackend : IWindowBackend
     public (int Width, int Height) FramebufferSize => (_window.FramebufferSize.X, _window.FramebufferSize.Y);
     public (int Width, int Height) LogicalSize => (_window.Size.X, _window.Size.Y);
 
+    // The window's monitor when GLFW knows it (set in fullscreen), else 60.
+    public double RefreshRate => _window.Monitor?.VideoMode.RefreshRate ?? 60;
+
     public string Title
     {
         get => _window.Title;
