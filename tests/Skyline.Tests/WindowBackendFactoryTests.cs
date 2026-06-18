@@ -32,6 +32,7 @@ public class WindowBackendFactoryTests
         public void Resize(int width, int height) { }
         public void Minimize() { }
         public void Restore() { }
+        public void SetCursor(CursorShape shape) { }
         public void Dispose() { }
     }
 

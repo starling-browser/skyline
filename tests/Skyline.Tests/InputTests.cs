@@ -105,4 +105,33 @@ public class InputTests
     {
         Assert.AreEqual(expected, ModifierKeysMap.FromPressed(k => k == pressed));
     }
+
+    [DataTestMethod]
+    [DataRow(CursorShape.Pointer, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.Text, Silk.NET.GLFW.CursorShape.IBeam)]
+    [DataRow(CursorShape.Crosshair, Silk.NET.GLFW.CursorShape.Crosshair)]
+    [DataRow(CursorShape.Move, Silk.NET.GLFW.CursorShape.AllResize)]
+    [DataRow(CursorShape.NotAllowed, Silk.NET.GLFW.CursorShape.NotAllowed)]
+    [DataRow(CursorShape.Grab, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.Grabbing, Silk.NET.GLFW.CursorShape.Hand)]
+    [DataRow(CursorShape.ResizeEw, Silk.NET.GLFW.CursorShape.HResize)]
+    [DataRow(CursorShape.ResizeNs, Silk.NET.GLFW.CursorShape.VResize)]
+    [DataRow(CursorShape.ResizeNwse, Silk.NET.GLFW.CursorShape.NwseResize)]
+    [DataRow(CursorShape.ResizeNesw, Silk.NET.GLFW.CursorShape.NeswResize)]
+    [DataRow(CursorShape.ResizeAll, Silk.NET.GLFW.CursorShape.AllResize)]
+    public void CursorShapeMapsToGlfwCursor(CursorShape shape, Silk.NET.GLFW.CursorShape expected)
+    {
+        Assert.AreEqual(expected, CursorShapeMap.ToGlfwCursor(shape));
+    }
+
+    [DataTestMethod]
+    [DataRow(CursorShape.Default)]
+    [DataRow(CursorShape.Wait)]
+    [DataRow(CursorShape.Progress)]
+    [DataRow((CursorShape)999)]
+    public void CursorShapeWithNoGlfwCursorMapsToNull(CursorShape shape)
+    {
+        // Default, the busy shapes, and anything out of range show the OS arrow.
+        Assert.IsNull(CursorShapeMap.ToGlfwCursor(shape));
+    }
 }

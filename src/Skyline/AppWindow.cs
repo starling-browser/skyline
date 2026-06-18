@@ -186,6 +186,13 @@ public sealed class AppWindow : IDisposable
     /// <summary>Resize to a logical size. Main thread only; <see cref="Resized"/> follows.</summary>
     public void Resize(int width, int height) => _backend.Resize(width, height);
 
+    /// <summary>
+    /// Set the OS cursor shown over the window's content. Main thread only.
+    /// Drive it from the hit-tested element as the pointer moves. A shape the
+    /// platform has no cursor for falls back to the default arrow.
+    /// </summary>
+    public void SetCursor(CursorShape shape) => _backend.SetCursor(shape);
+
     /// <summary>Minimize the window. Main thread only.</summary>
     public void Minimize()
     {

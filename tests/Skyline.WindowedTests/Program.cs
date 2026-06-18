@@ -94,6 +94,29 @@ Check(key is { IsDown: false, Key: Key.Unknown, Code: 12345 }, "unmapped key rep
 win.RaiseText('é');
 Check(text is { Character: 'é' }, "RaiseText reaches TextInput");
 
+// --- Cursor shapes on the GLFW backend ---------------------------------
+
+using (var cursorWin = new AppWindow(new AppWindowOptions { Title = "cursor", Width = 160, Height = 120, ForceGlfw = true }))
+{
+    var cursorOk = true;
+    try
+    {
+        // Two passes: the second reuses each cached cursor instead of recreating it.
+        for (var pass = 0; pass < 2; pass++)
+        {
+            foreach (var shape in Enum.GetValues<CursorShape>())
+            {
+                cursorWin.SetCursor(shape);
+            }
+        }
+    }
+    catch
+    {
+        cursorOk = false;
+    }
+    Check(cursorOk, "SetCursor applies every shape on the GLFW backend without throwing");
+}
+
 // --- GPU on a real window surface --------------------------------------
 
 using (var gpu = GpuContext.Create(win.Surface!, surfaceOptions: new WindowSurfaceOptions

@@ -48,6 +48,14 @@ internal interface IWindowBackend : IDisposable
     void Resize(int width, int height);
     void Minimize();
     void Restore();
+
+    /// <summary>
+    /// Set the OS cursor shown over the window's content. The caller drives this
+    /// from whatever sits under the pointer as it moves — for example a hand
+    /// over a link or an I-beam over text. Each backend maps the shape to its
+    /// own platform cursor.
+    /// </summary>
+    void SetCursor(CursorShape shape);
 }
 
 /// <summary>
