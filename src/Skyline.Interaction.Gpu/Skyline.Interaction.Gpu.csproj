@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>Skyline.Interaction.Gpu</RootNamespace>
+    <Description>Optional GPU bridge for the Skyline interaction tier: a wgpu-handle transfer representation so a surface copy never round-trips to the processor. Pairs Skyline.Interaction's transfer model with Skyline.Gpu.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Skyline.Interaction\Skyline.Interaction.csproj" />
+    <ProjectReference Include="..\Skyline.Gpu\Skyline.Gpu.csproj" />
+  </ItemGroup>
+</Project>
