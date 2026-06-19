@@ -29,8 +29,7 @@ using var renderer = new CanvasRenderer(loop, win.CurrentFrame);
 var drawing = false;
 var presented = 0;
 
-var handler = new CallbackAppWindowHandler();
-loop.Handler = handler;
+var handler = loop.Handler;
 
 handler.Resized = (_, _) =>
 {

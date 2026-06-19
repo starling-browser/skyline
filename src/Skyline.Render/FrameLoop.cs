@@ -104,13 +104,14 @@ public sealed unsafe class FrameLoop : IDisposable
     public FrameCallback? OnRender { get; set; }
 
     /// <summary>
-    /// Optional handler for the window's input, resize, and focus callbacks. The
-    /// loop owns the window's <see cref="AppWindow.Handler"/> while attached and
-    /// forwards everything except the frame draw here, so set this instead of the
-    /// window's handler. Draw through <see cref="OnRender"/>, not the handler's
-    /// render callback. Resize forwards after the loop reconfigures the surface.
+    /// Callbacks for the window's input, resize, and focus — already created, so
+    /// set them directly (e.g. <c>loop.Handler.KeyInput = ...</c>). The loop owns
+    /// the window's <see cref="AppWindow.Handler"/> while attached and forwards
+    /// everything except the frame draw here. Draw through <see cref="OnRender"/>,
+    /// not the render callback. Resize forwards after the loop reconfigures the
+    /// surface.
     /// </summary>
-    public AppWindowHandler? Handler { get; set; }
+    public CallbackAppWindowHandler Handler { get; } = new();
 
     /// <summary>The GPU context — raw <c>Api</c>, device, and queue handles for the eject.</summary>
     public GpuContext Gpu => _gpu;
@@ -149,12 +150,12 @@ public sealed unsafe class FrameLoop : IDisposable
             Resized = (w, f) =>
             {
                 OnResized(f);
-                Handler?.OnResized(w, f);
+                Handler.OnResized(w, f);
             },
-            PointerInput = (w, e) => Handler?.OnPointerInput(w, e),
-            KeyInput = (w, e) => Handler?.OnKeyInput(w, e),
-            TextInput = (w, e) => Handler?.OnTextInput(w, e),
-            FocusChanged = (w, e) => Handler?.OnFocusChanged(w, e),
+            PointerInput = (w, e) => Handler.OnPointerInput(w, e),
+            KeyInput = (w, e) => Handler.OnKeyInput(w, e),
+            TextInput = (w, e) => Handler.OnTextInput(w, e),
+            FocusChanged = (w, e) => Handler.OnFocusChanged(w, e),
         };
         // Continuous loops render every frame (IsDirty left null). Event-driven
         // loops idle until a redraw is pending. Consuming the flag here — at the

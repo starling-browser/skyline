@@ -35,9 +35,7 @@ using var renderer = new GalaxyRenderer(loop);
 var animate = true;
 var presented = 0;
 
-var handler = new CallbackAppWindowHandler();
-loop.Handler = handler;
-handler.KeyInput = (_, e) =>
+loop.Handler.KeyInput = (_, e) =>
 {
     if (!e.IsDown)
     {

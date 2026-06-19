@@ -516,7 +516,7 @@ using (var rwin = new AppWindow(new AppWindowOptions { Title = "frameloop attach
     {
         ClearColor = new Silk.NET.WebGPU.Color { R = 0.0, G = 0.4, B = 0.8, A = 1.0 },
     });
-    loop.Handler = new CallbackAppWindowHandler { Resized = (_, _) => rloopResized = true };
+    loop.Handler.Resized = (_, _) => rloopResized = true;
     Check(ReferenceEquals(loop.Surface, loop.Gpu.Surface), "FrameLoop.Surface is the context surface");
     Check(loop.Pacer.MaxFramesInFlight == 2, "FrameLoop exposes its pacer");
 

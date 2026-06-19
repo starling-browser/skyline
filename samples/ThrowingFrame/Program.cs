@@ -30,15 +30,12 @@ using var loop = FrameLoop.Attach(win, new FrameLoopOptions
 
 var rendered = 0;
 
-loop.Handler = new CallbackAppWindowHandler
+loop.Handler.KeyInput = (_, e) =>
 {
-    KeyInput = (_, e) =>
+    if (e.IsDown && e.Key == Key.Escape)
     {
-        if (e.IsDown && e.Key == Key.Escape)
-        {
-            win.RequestClose();
-        }
-    },
+        win.RequestClose();
+    }
 };
 
 loop.OnRender = (in Frame frame) =>
