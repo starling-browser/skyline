@@ -16,10 +16,10 @@ namespace Skyline;
 /// own display's rate. Two vsynced windows on different monitors never
 /// throttle each other, because no two blocking waits share a thread.
 ///
-/// Threading contract for consumers: input events and <see cref="Invoke"/>
-/// actions run on the main thread. <see cref="AppWindow.RenderFrame"/> and
-/// <see cref="AppWindow.Resized"/> run on that window's render thread, so
-/// all of a window's GPU work stays on one thread.
+/// Threading contract for consumers: input callbacks and <see cref="Invoke"/>
+/// actions run on the main thread. <see cref="AppWindowHandler.OnRenderFrame"/>
+/// and <see cref="AppWindowHandler.OnResized"/> run on that window's render
+/// thread, so all of a window's GPU work stays on one thread.
 /// </summary>
 public sealed class AppHost : IDisposable
 {

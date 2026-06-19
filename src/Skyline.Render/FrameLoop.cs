@@ -12,8 +12,8 @@ public delegate void FrameCallback(in Frame frame);
 /// <summary>
 /// Owns the per-frame ritual every windowed wgpu app repeats: pace, acquire
 /// (with stale-swapchain recovery), begin a clear pass, run your draw, end,
-/// submit, count, present. It also wires the window's resize, idle, and
-/// render events. What it owns, it owns completely — but every raw handle
+/// submit, count, present. It also drives the window's resize, idle, and
+/// render callbacks. What it owns, it owns completely — but every raw handle
 /// (<see cref="Gpu"/>, <see cref="Surface"/>, and the live encoder/view/pass
 /// on each <see cref="Frame"/>) stays one property away, so an app drops to
 /// raw wgpu without leaving the loop.
@@ -103,6 +103,16 @@ public sealed unsafe class FrameLoop : IDisposable
     /// <summary>Your per-frame draw. Runs after the clear pass begins (when enabled) and before submit/present. Set it before the loop starts.</summary>
     public FrameCallback? OnRender { get; set; }
 
+    /// <summary>
+    /// Callbacks for the window's input, resize, and focus — already created, so
+    /// set them directly (e.g. <c>loop.Handler.KeyInput = ...</c>). The loop owns
+    /// the window's <see cref="AppWindow.Handler"/> while attached and forwards
+    /// everything except the frame draw here. Draw through <see cref="OnRender"/>,
+    /// not the render callback. Resize forwards after the loop reconfigures the
+    /// surface.
+    /// </summary>
+    public CallbackAppWindowHandler Handler { get; } = new();
+
     /// <summary>The GPU context — raw <c>Api</c>, device, and queue handles for the eject.</summary>
     public GpuContext Gpu => _gpu;
 
@@ -131,8 +141,22 @@ public sealed unsafe class FrameLoop : IDisposable
         _cancel = _surface.CancelFrame;
         var frame = window.CurrentFrame;
         _surface.Configure(frame.PixelWidth, frame.PixelHeight);
-        window.Resized += OnResized;
-        window.RenderFrame += OnRenderFrame;
+        // The loop is the window's single handler. It drives the frame itself
+        // and forwards input, focus, and post-reconfigure resize to the app's
+        // Handler.
+        window.Handler = new CallbackAppWindowHandler
+        {
+            RenderFrame = (_, info) => OnRenderFrame(info),
+            Resized = (w, f) =>
+            {
+                OnResized(f);
+                Handler.OnResized(w, f);
+            },
+            PointerInput = (w, e) => Handler.OnPointerInput(w, e),
+            KeyInput = (w, e) => Handler.OnKeyInput(w, e),
+            TextInput = (w, e) => Handler.OnTextInput(w, e),
+            FocusChanged = (w, e) => Handler.OnFocusChanged(w, e),
+        };
         // Continuous loops render every frame (IsDirty left null). Event-driven
         // loops idle until a redraw is pending. Consuming the flag here — at the
         // gate that decides whether to render — makes the check-and-consume one
@@ -252,8 +276,7 @@ public sealed unsafe class FrameLoop : IDisposable
         _disposed = true;
         if (_window is not null)
         {
-            _window.Resized -= OnResized;
-            _window.RenderFrame -= OnRenderFrame;
+            _window.Handler = null;
         }
         // Attach built the context and pacer, so Attach disposes them (and the
         // context disposes its surface). Over and the test seam borrow them, so

@@ -72,25 +72,28 @@ internal sealed unsafe class WindowRenderer : IDisposable
         var frame = window.CurrentFrame;
         _surface.Configure(frame.PixelWidth, frame.PixelHeight);
 
-        window.Resized += f => _surface.Configure(f.PixelWidth, f.PixelHeight);
-        window.KeyInput += e =>
+        window.Handler = new CallbackAppWindowHandler
         {
-            if (e.IsDown && e.Key == Skyline.Input.Key.Escape)
+            Resized = (_, f) => _surface.Configure(f.PixelWidth, f.PixelHeight),
+            KeyInput = (_, e) =>
             {
-                window.RequestClose();
-            }
-        };
-        window.RenderFrame += f =>
-        {
-            if (!RenderFrame(f))
+                if (e.IsDown && e.Key == Skyline.Input.Key.Escape)
+                {
+                    window.RequestClose();
+                }
+            },
+            RenderFrame = (_, f) =>
             {
-                return;
-            }
+                if (!RenderFrame(f))
+                {
+                    return;
+                }
 
-            if (_maxFrames > 0 && _presented >= _maxFrames)
-            {
-                window.RequestClose();
-            }
+                if (_maxFrames > 0 && _presented >= _maxFrames)
+                {
+                    window.RequestClose();
+                }
+            },
         };
     }
 

@@ -45,7 +45,7 @@ public sealed class App
         });
 
         var presented = 0;
-        win.KeyInput += e =>
+        loop.Handler.KeyInput = (_, e) =>
         {
             if (e.IsDown && e.Key == Key.Escape)
             {

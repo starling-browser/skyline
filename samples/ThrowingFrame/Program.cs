@@ -30,7 +30,7 @@ using var loop = FrameLoop.Attach(win, new FrameLoopOptions
 
 var rendered = 0;
 
-win.KeyInput += e =>
+loop.Handler.KeyInput = (_, e) =>
 {
     if (e.IsDown && e.Key == Key.Escape)
     {

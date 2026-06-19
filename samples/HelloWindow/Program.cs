@@ -47,13 +47,16 @@ var hue = 0f;
 var dirtyFrames = 30;
 var presented = 0;
 
-win.Resized += f =>
+var handler = new CallbackAppWindowHandler();
+win.Handler = handler;
+
+handler.Resized = (_, f) =>
 {
     gpu.Configure(f.PixelWidth, f.PixelHeight);
     dirtyFrames = 30; // reconfigure discards surface contents, so redraw
 };
 
-win.PointerInput += e =>
+handler.PointerInput = (_, e) =>
 {
     if (e.Kind != PointerEventKind.Move)
     {
@@ -66,7 +69,7 @@ win.PointerInput += e =>
     dirtyFrames = Math.Max(dirtyFrames, 3);
 };
 
-win.KeyInput += e =>
+handler.KeyInput = (_, e) =>
 {
     if (!e.IsDown)
     {
@@ -85,7 +88,7 @@ win.KeyInput += e =>
 // finishes, otherwise idle frames sleep inside Skyline's loop.
 win.IsDirty = () => maxFrames > 0 || animate || dirtyFrames > 0;
 
-win.RenderFrame += f =>
+handler.RenderFrame = (_, f) =>
 {
     if (animate)
     {
